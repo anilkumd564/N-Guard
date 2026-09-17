@@ -62,6 +62,35 @@ export type {
   HttpMethod,
 } from './providers/IntegrationProvider.js';
 
+// Phase 4: Ingestion
+export {
+  PlainTextExtractor,
+  CsvTextExtractor,
+  JsonTextExtractor,
+  PdfExtractorStub,
+  DocxExtractorStub,
+  DocumentExtractorRegistry,
+} from './ingestion/DocumentTextExtractor.js';
+export type {
+  DocumentTextExtractor,
+  ExtractionResult,
+  ExtractionStatus,
+} from './ingestion/DocumentTextExtractor.js';
+
+export { chunkText }          from './ingestion/TextChunker.js';
+export type { ChunkOptions, TextChunk } from './ingestion/TextChunker.js';
+
+export { IngestionService }   from './ingestion/IngestionService.js';
+export type {
+  IngestionInput,
+  IngestionResult,
+  IngestionResultStatus,
+  IngestionChunkResult,
+  DocumentMetadata as IngestionDocumentMetadata,
+} from './ingestion/IngestionService.js';
+
+export { LocalFileStorageProvider } from './storage/LocalFileStorageProvider.js';
+
 // Shared Domain Types
 export type {
   S4Edition,

@@ -1,36 +1,28 @@
 /**
  * N-Guard — Core Domain Model
  *
- * Permanent architecture rules enforced here:
- *  - Every entity is tenant_id + project_id scoped (rules 1, 10).
- *  - S/4HANA edition is a first-class field; never inferred or defaulted (rule 2).
- *  - Knowledge retrieval is filtered by edition/release before semantic search (rule 3).
- *  - Every entity carries managed timestamps via CAP aspects.
+ * Permanent architecture rules:
+ *  - Every entity is tenant/project scoped (rule 10).
+ *  - S/4HANA edition is a first-class field; never inferred (rule 2).
+ *  - Knowledge retrieval is filtered by edition/release BEFORE semantic search (rule 3).
  *
- * Phase 2 additions:
- *  - SAPProduct, TransformationType, CleanCorePolicy enums
- *  - SAPDeploymentProfiles entity
- *  - UserActors entity
- *  - Projects enhanced
- *
- * Phase 3 additions:
- *  - WorkItemType, WorkItemPriority enums
- *  - DesignRequests enhanced with type, priority, objective, source, owner, tags, etc.
- *  - RelatedWorkItems entity (cross-references between requirements/CRs/user stories)
+ * Phase 2: SAPProduct, TransformationType, CleanCorePolicy, SAPDeploymentProfiles, UserActors
+ * Phase 3: WorkItemType, WorkItemPriority, enhanced DesignRequests, RelatedWorkItems
+ * Phase 4: KnowledgeSourceType, IngestionStatus, KnowledgeSources, KnowledgeChunks, IngestionJobs;
+ *           KnowledgeDocuments enhanced with full metadata fields
  */
 
 namespace nguard;
 
 using { cuid, managed, temporal } from '@sap/cds/common';
 
-// ─── Enumerations ────────────────────────────────────────────────────────────
+// ─── Phase 1–3 Enumerations ───────────────────────────────────────────────────
 
 type S4Edition : String(30) enum {
   ON_PREMISE    = 'ON_PREMISE';
   CLOUD_PRIVATE = 'CLOUD_PRIVATE';
   CLOUD_PUBLIC  = 'CLOUD_PUBLIC';
 }
-
 type S4Release : String(10);
 
 type Verdict : String(30) enum {
@@ -42,76 +34,77 @@ type Verdict : String(30) enum {
 }
 
 type AssessmentStatus : String(20) enum {
-  PENDING    = 'PENDING';
-  PROCESSING = 'PROCESSING';
-  COMPLETED  = 'COMPLETED';
-  FAILED     = 'FAILED';
+  PENDING = 'PENDING'; PROCESSING = 'PROCESSING'; COMPLETED = 'COMPLETED'; FAILED = 'FAILED';
 }
 
 type RequestStatus : String(20) enum {
-  DRAFT      = 'DRAFT';
-  SUBMITTED  = 'SUBMITTED';
-  ASSESSING  = 'ASSESSING';
-  ASSESSED   = 'ASSESSED';
-  APPROVED   = 'APPROVED';
-  REJECTED   = 'REJECTED';
+  DRAFT = 'DRAFT'; SUBMITTED = 'SUBMITTED'; ASSESSING = 'ASSESSING';
+  ASSESSED = 'ASSESSED'; APPROVED = 'APPROVED'; REJECTED = 'REJECTED';
 }
 
 type DocType : String(50) enum {
-  SAP_BEST_PRACTICE     = 'SAP_BEST_PRACTICE';
-  RELEASE_NOTE          = 'RELEASE_NOTE';
-  CUSTOMIZING_GUIDE     = 'CUSTOMIZING_GUIDE';
-  EXTENSIBILITY_GUIDE   = 'EXTENSIBILITY_GUIDE';
-  FIT_GAP_ANALYSIS      = 'FIT_GAP_ANALYSIS';
-  ARCHITECTURE_DECISION = 'ARCHITECTURE_DECISION';
-  OTHER                 = 'OTHER';
+  SAP_BEST_PRACTICE = 'SAP_BEST_PRACTICE'; RELEASE_NOTE = 'RELEASE_NOTE';
+  CUSTOMIZING_GUIDE = 'CUSTOMIZING_GUIDE'; EXTENSIBILITY_GUIDE = 'EXTENSIBILITY_GUIDE';
+  FIT_GAP_ANALYSIS = 'FIT_GAP_ANALYSIS'; ARCHITECTURE_DECISION = 'ARCHITECTURE_DECISION';
+  OTHER = 'OTHER';
 }
 
-// ─── Phase 2 Enumerations ─────────────────────────────────────────────────────
-
-type SAPProduct : String(50) enum {
-  S4HANA = 'S4HANA';
-}
+type SAPProduct : String(50) enum { S4HANA = 'S4HANA'; }
 
 type TransformationType : String(20) enum {
-  GREENFIELD = 'GREENFIELD';
-  BROWNFIELD = 'BROWNFIELD';
-  SELECTIVE  = 'SELECTIVE';
-  OTHER      = 'OTHER';
+  GREENFIELD = 'GREENFIELD'; BROWNFIELD = 'BROWNFIELD';
+  SELECTIVE = 'SELECTIVE'; OTHER = 'OTHER';
 }
 
 type CleanCorePolicy : String(20) enum {
-  STRICT   = 'STRICT';
-  STANDARD = 'STANDARD';
-  FLEXIBLE = 'FLEXIBLE';
-  NOT_SET  = 'NOT_SET';
+  STRICT = 'STRICT'; STANDARD = 'STANDARD'; FLEXIBLE = 'FLEXIBLE'; NOT_SET = 'NOT_SET';
 }
 
-// ─── Phase 3 Enumerations ─────────────────────────────────────────────────────
-
-/**
- * Workspace item type discriminant.
- * All four types share the DesignRequests entity; the workItemType
- * field identifies which flavour the record represents.
- */
 type WorkItemType : String(20) enum {
-  REQUIREMENT      = 'REQUIREMENT';      // Business requirement / functional requirement
-  USER_STORY       = 'USER_STORY';       // Agile user story
-  CHANGE_REQUEST   = 'CHANGE_REQUEST';   // Formal change request / deviation request
-  DESIGN_ARTIFACT  = 'DESIGN_ARTIFACT';  // Design decision, blueprint reference, or artefact link
+  REQUIREMENT = 'REQUIREMENT'; USER_STORY = 'USER_STORY';
+  CHANGE_REQUEST = 'CHANGE_REQUEST'; DESIGN_ARTIFACT = 'DESIGN_ARTIFACT';
+}
+
+type WorkItemPriority : String(20) enum {
+  CRITICAL = 'CRITICAL'; HIGH = 'HIGH'; MEDIUM = 'MEDIUM'; LOW = 'LOW';
+}
+
+// ─── Phase 4 Enumerations ─────────────────────────────────────────────────────
+
+/**
+ * Classification of a knowledge source's origin.
+ */
+type KnowledgeSourceType : String(30) enum {
+  SAP_HELP_PORTAL    = 'SAP_HELP_PORTAL';     // help.sap.com, documentation
+  SAP_BEST_PRACTICE  = 'SAP_BEST_PRACTICE';    // SAP Best Practice Explorer, Signavio
+  RELEASE_NOTE       = 'RELEASE_NOTE';          // SAP Release Notes / What's New
+  PARTNER_CONTENT    = 'PARTNER_CONTENT';       // Certified partner knowledge
+  INTERNAL_GUIDELINE = 'INTERNAL_GUIDELINE';    // Customer / project-internal
+  FILE_UPLOAD        = 'FILE_UPLOAD';           // Manually uploaded document
 }
 
 /**
- * Work item priority.  Applies to all workItemTypes.
+ * Authority classification for knowledge content.
+ * Controls how evidence is weighted in assessments.
  */
-type WorkItemPriority : String(20) enum {
-  CRITICAL = 'CRITICAL';
-  HIGH     = 'HIGH';
-  MEDIUM   = 'MEDIUM';
-  LOW      = 'LOW';
+type AuthorityLevel : String(20) enum {
+  SAP_OFFICIAL = 'SAP_OFFICIAL';  // SAP official documentation
+  PARTNER      = 'PARTNER';       // Certified partner / SI content
+  INTERNAL     = 'INTERNAL';      // Customer / project-internal
 }
 
-// ─── Core Entities ───────────────────────────────────────────────────────────
+/**
+ * Status of document ingestion processing.
+ */
+type IngestionStatus : String(20) enum {
+  PENDING    = 'PENDING';    // Queued, not yet started
+  PROCESSING = 'PROCESSING'; // Extraction / chunking in progress
+  COMPLETED  = 'COMPLETED';  // Ingested successfully
+  FAILED     = 'FAILED';     // Ingestion failed; see ingestionError
+  SKIPPED    = 'SKIPPED';    // No extractable content found
+}
+
+// ─── Core Entities ────────────────────────────────────────────────────────────
 
 entity Tenants : cuid, managed {
   name        : String(200) not null;
@@ -164,38 +157,22 @@ entity UserActors : cuid, managed {
   isActive    : Boolean default true;
 }
 
-/**
- * DesignRequests is the Phase 3 Requirements Workspace entity.
- *
- * Unified model for Business Requirements, User Stories, Change Requests,
- * and Design Artifacts via the workItemType discriminant.
- *
- * Phase 3 additions (backward-compatible):
- *  - workItemType: discriminant for the four item types
- *  - priority, businessObjective, source, owner, tags, externalReference
- *  - deploymentProfile association (optional link to a specific profile)
- *  - relatedItems composition
- *
- * Every record remains scoped by project + tenant (rule 10).
- * Multiple ComplianceAssessments can be attached to one DesignRequest
- * (ready for Phase 7+) via the assessments composition.
- */
 entity DesignRequests : cuid, managed {
   project           : Association to Projects not null;
   tenant            : Association to Tenants  not null;
   workItemType      : WorkItemType default 'REQUIREMENT';
   title             : String(500)  not null;
   description       : LargeString  not null;
-  businessObjective : String(1000);          // Business value / why this matters
-  businessProcess   : String(200);           // e.g. 'Order-to-Cash'
-  module            : String(100);           // SAP module, e.g. 'SD', 'MM', 'FI'
+  businessObjective : String(1000);
+  businessProcess   : String(200);
+  module            : String(100);
   priority          : WorkItemPriority default 'MEDIUM';
-  source            : String(200);           // Origin: workshop, migration analysis, business user
-  requestedBy       : String(200);           // Submitting person
-  owner             : String(200);           // Responsible person / team
-  tags              : LargeString;           // JSON: string[]
-  externalReference : String(300);           // Jira, ADO, ServiceNow ticket reference
-  deploymentProfile : Association to SAPDeploymentProfiles; // Optional: profile context
+  source            : String(200);
+  requestedBy       : String(200);
+  owner             : String(200);
+  tags              : LargeString;
+  externalReference : String(300);
+  deploymentProfile : Association to SAPDeploymentProfiles;
   status            : RequestStatus default 'DRAFT';
   assessments       : Composition of many ComplianceAssessments
                         on assessments.designRequest = $self;
@@ -203,16 +180,11 @@ entity DesignRequests : cuid, managed {
                         on relatedItems.sourceItem = $self;
 }
 
-/**
- * RelatedWorkItems captures cross-references between workspace items.
- * e.g. a Change Request that DEPENDS_ON a Business Requirement.
- */
 entity RelatedWorkItems : cuid {
-  sourceItem  : Association to DesignRequests not null;
-  targetItem  : Association to DesignRequests not null;
-  relation    : String(50) default 'RELATES_TO';
-  // Supported relations: RELATES_TO | BLOCKS | DEPENDS_ON | DUPLICATES | CHILD_OF | PARENT_OF
-  note        : String(500);
+  sourceItem : Association to DesignRequests not null;
+  targetItem : Association to DesignRequests not null;
+  relation   : String(50) default 'RELATES_TO';
+  note       : String(500);
 }
 
 entity ComplianceAssessments : cuid, managed {
@@ -240,19 +212,131 @@ entity Recommendations : cuid {
   rationale   : LargeString;
 }
 
-entity KnowledgeDocuments : cuid, managed {
-  tenant      : Association to Tenants;
-  project     : Association to Projects;
-  edition     : S4Edition;
-  release     : S4Release;
-  title       : String(500) not null;
-  content     : LargeString not null;
-  source      : String(1000);
-  docType     : DocType default 'OTHER';
-  embedding   : LargeString;
-  isActive    : Boolean default true;
+// ─── Phase 4: Knowledge Ingestion Entities ────────────────────────────────────
+
+/**
+ * KnowledgeSource represents a named origin of SAP knowledge artifacts.
+ * Examples: "SAP Help Portal S/4HANA 2024", "Internal Architecture Guidelines",
+ *           "Signavio Process Content".
+ *
+ * Every KnowledgeDocument is linked to a source for traceability.
+ * Scoped by tenant; project is optional (null = tenant-wide source).
+ */
+entity KnowledgeSources : cuid, managed {
+  tenant         : Association to Tenants;       // null = system/global source
+  project        : Association to Projects;       // null = tenant-wide
+  name           : String(200) not null;
+  description    : String(1000);
+  sourceType     : KnowledgeSourceType default 'FILE_UPLOAD';
+  baseUrl        : String(500);                  // Base URL for web sources
+  authorityLevel : AuthorityLevel default 'INTERNAL';
+  isActive       : Boolean default true;
+  documents      : Composition of many KnowledgeDocuments
+                     on documents.knowledgeSource = $self;
 }
 
+/**
+ * KnowledgeDocuments store ingested knowledge content.
+ *
+ * Phase 4 enhancements (backward-compatible additions):
+ *  - knowledgeSource association
+ *  - full metadata fields (authorityLevel, processArea, scopeItem, etc.)
+ *  - ingestion status and error tracking
+ *  - chunkCount summary field
+ *
+ * Retrieval rule (architecture rule 3):
+ *  Filter by tenant → project → edition → release before semantic search.
+ */
+entity KnowledgeDocuments : cuid, managed {
+  tenant           : Association to Tenants;      // null = global/system knowledge
+  project          : Association to Projects;      // null = tenant-wide
+  knowledgeSource  : Association to KnowledgeSources; // Phase 4: source link
+  edition          : S4Edition;                   // null = all editions
+  release          : S4Release;                   // null = all releases
+  releaseFrom      : S4Release;                   // earliest applicable release
+  releaseTo        : S4Release;                   // latest applicable (null = current)
+  title            : String(500) not null;
+  content          : LargeString not null;         // full extracted text
+  source           : String(1000);                 // URL or citation
+  docType          : DocType default 'OTHER';
+  // Phase 4 metadata fields:
+  authorityLevel   : AuthorityLevel default 'INTERNAL';
+  country          : String(100);                 // ISO country or 'GLOBAL'
+  industry         : String(100);
+  processArea      : String(200);                 // e.g. 'Order-to-Cash'
+  processId        : String(100);                 // SAP process ID
+  scopeItem        : String(50);                  // e.g. 'BH1', 'J45'
+  capability       : String(200);
+  extensionType    : String(100);                 // e.g. 'In-App', 'Side-by-Side'
+  documentVersion  : String(50);
+  documentDate     : Date;
+  retrievalDate    : Timestamp;
+  language         : String(10) default 'EN';
+  mimeType         : String(100);                 // original file MIME type
+  fileSizeBytes    : Integer;
+  // Ingestion tracking:
+  ingestionStatus  : IngestionStatus default 'PENDING';
+  ingestionError   : String(2000);
+  chunkCount       : Integer default 0;
+  // Embeddings (Phase 5 will populate):
+  embedding        : LargeString;               // JSON number[] in SQLite; REAL_VECTOR in HANA
+  isActive         : Boolean default true;
+  chunks           : Composition of many KnowledgeChunks on chunks.document = $self;
+}
+
+/**
+ * KnowledgeChunks are text segments produced by chunking a KnowledgeDocument.
+ *
+ * Each chunk inherits the parent document's metadata to support efficient
+ * edition/release/tenant filtering at retrieval time (rule 3).
+ *
+ * Embeddings are populated in Phase 5 (vector indexing).
+ * No LLM calls occur in Phase 4 — chunking is pure text processing.
+ */
+entity KnowledgeChunks : cuid {
+  document       : Association to KnowledgeDocuments not null;
+  tenant         : Association to Tenants;          // denormalized for efficient filtering
+  project        : Association to Projects;
+  sequence       : Integer not null;                // 1-based chunk index
+  text           : LargeString not null;
+  tokenCount     : Integer;                         // approximate word/token count
+  // Denormalized metadata for retrieval filtering (rule 3):
+  edition        : S4Edition;
+  release        : S4Release;
+  country        : String(100);
+  industry       : String(100);
+  processArea    : String(200);
+  scopeItem      : String(50);
+  authorityLevel : AuthorityLevel default 'INTERNAL';
+  // Embedding (Phase 5):
+  embedding      : LargeString;                     // JSON number[] → REAL_VECTOR in HANA
+}
+
+/**
+ * IngestionJobs track the lifecycle of a document ingestion request.
+ *
+ * A job is created when a file is submitted for ingestion.
+ * The handler processes extraction, chunking, and metadata assignment
+ * asynchronously. No vector embedding occurs in Phase 4.
+ */
+entity IngestionJobs : cuid, managed {
+  tenant          : Association to Tenants;
+  project         : Association to Projects;
+  knowledgeSource : Association to KnowledgeSources;
+  document        : Association to KnowledgeDocuments;
+  status          : IngestionStatus default 'PENDING';
+  sourceFileName  : String(500);
+  sourceMimeType  : String(100);
+  extractedLength : Integer;             // character count of extracted text
+  chunkCount      : Integer default 0;
+  error           : String(2000);
+  startedAt       : Timestamp;
+  completedAt     : Timestamp;
+}
+
+/**
+ * AuditLogs — immutable event log.
+ */
 entity AuditLogs : cuid {
   tenant      : Association to Tenants;
   project     : Association to Projects;

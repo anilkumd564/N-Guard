@@ -1,12 +1,10 @@
 /**
  * N-Guard — Service Layer
  *
- * NGuardService  : Tenant/project-scoped operations for architects and consultants.
- * AdminService   : Tenant administration and knowledge management.
- *
  * Phase 2: Projects writable, SAPDeploymentProfiles, createProject action.
- * Phase 3: DesignRequests enhanced (all new fields visible),
- *           RelatedWorkItems exposed, importRequirements / exportRequirements actions.
+ * Phase 3: Enhanced DesignRequests, RelatedWorkItems, importRequirements/exportRequirements.
+ * Phase 4: KnowledgeSources, KnowledgeChunks, IngestionJobs exposed;
+ *           ingestDocument, createKnowledgeSource, deleteKnowledgeSource actions.
  */
 
 using { nguard } from '../db/schema';
@@ -14,122 +12,149 @@ using { nguard } from '../db/schema';
 @path: '/api/v1'
 service NGuardService {
 
-  // ── Tenants (read-only) ───────────────────────────────────────────────────
-  @readonly
-  entity Tenants as projection on nguard.Tenants
+  @readonly entity Tenants as projection on nguard.Tenants
     excluding { projects, userActors };
 
-  // ── Projects ──────────────────────────────────────────────────────────────
   entity Projects as projection on nguard.Projects
     excluding { designRequests, knowledgeDocs };
 
-  // ── Deployment Profiles ───────────────────────────────────────────────────
   entity SAPDeploymentProfiles as projection on nguard.SAPDeploymentProfiles;
 
-  // ── User Actors ───────────────────────────────────────────────────────────
-  @readonly
-  entity UserActors as projection on nguard.UserActors
+  @readonly entity UserActors as projection on nguard.UserActors
     excluding { tenant };
 
-  // ── Requirements Workspace ────────────────────────────────────────────────
-  /**
-   * DesignRequests exposes the full Phase 3 workspace model.
-   * Excludes assessments from list responses (expand explicitly when needed).
-   * Server-side validation enforces project isolation and required fields.
-   */
   entity DesignRequests as projection on nguard.DesignRequests
     excluding { assessments, relatedItems };
 
-  /**
-   * RelatedWorkItems — cross-references between workspace items.
-   */
   entity RelatedWorkItems as projection on nguard.RelatedWorkItems;
 
-  // ── Assessments (read-only) ───────────────────────────────────────────────
+  @readonly entity ComplianceAssessments as projection on nguard.ComplianceAssessments;
+  @readonly entity Recommendations       as projection on nguard.Recommendations;
+
+  // ── Phase 4: Knowledge Base ────────────────────────────────────────────────
+
+  /**
+   * KnowledgeSources — named origins for knowledge documents.
+   * Read/write: users can manage sources from the Knowledge admin UI.
+   */
+  entity KnowledgeSources as projection on nguard.KnowledgeSources
+    excluding { documents };
+
+  /**
+   * KnowledgeDocuments — list/read ingested documents.
+   * Write access is via the ingestDocument action (not direct POST).
+   * Excludes embedding vector (internal; never exposed via API).
+   */
+  entity KnowledgeDocuments as projection on nguard.KnowledgeDocuments
+    excluding { embedding, chunks };
+
+  /**
+   * KnowledgeChunks — read-only inspection of document chunks.
+   * Used for admin preview; never used for semantic search directly.
+   */
   @readonly
-  entity ComplianceAssessments as projection on nguard.ComplianceAssessments;
+  entity KnowledgeChunks as projection on nguard.KnowledgeChunks
+    excluding { embedding };
 
+  /**
+   * IngestionJobs — status tracking for ingestion operations.
+   */
   @readonly
-  entity Recommendations as projection on nguard.Recommendations;
+  entity IngestionJobs as projection on nguard.IngestionJobs;
 
-  // ── Unbound Actions ───────────────────────────────────────────────────────
+  // ── Unbound Actions ────────────────────────────────────────────────────────
 
-  /** Create project + initial deployment profile (tenant auto-resolved). */
   action createProject(
-    name               : String,
-    description        : String,
-    edition            : String,
-    release            : String,
-    transformationType : String,
-    cleanCorePolicy    : String,
-    profileName        : String,
-    deploymentModel    : String,
-    profileRelease     : String,
-    country            : String,
-    industry           : String,
-    processAreas       : String,
-    sourceSystemDescription : String
+    name: String, description: String, edition: String, release: String,
+    transformationType: String, cleanCorePolicy: String,
+    profileName: String, deploymentModel: String, profileRelease: String,
+    country: String, industry: String, processAreas: String,
+    sourceSystemDescription: String
   ) returns Projects;
 
   /**
-   * Import requirements/user stories/CRs from a CSV string.
-   *
-   * The CSV must have a header row.  Required columns: workItemType, title, description.
-   * Optional columns: businessObjective, businessProcess, module, priority, source,
-   *   owner, tags, externalReference.
-   *
-   * Returns the number of successfully imported rows and a JSON array of
-   * row-level errors so the caller can display per-row feedback.
+   * Create a knowledge source (named repository of documents).
    */
-  action importRequirements(
-    projectId : UUID,
-    csv       : LargeString
-  ) returns {
-    imported   : Integer;
-    errorCount : Integer;
-    errors     : LargeString;   // JSON: Array<{ row: number, field: string, message: string }>
-  };
+  action createKnowledgeSource(
+    name           : String,
+    description    : String,
+    sourceType     : String,
+    authorityLevel : String,
+    baseUrl        : String,
+    projectId      : UUID
+  ) returns KnowledgeSources;
 
   /**
-   * Export requirements for a project as a CSV string.
-   * Optionally filtered by workItemType.
+   * Ingest a document into a knowledge source.
+   *
+   * The document content is passed as a Base64-encoded string to avoid
+   * binary transport issues with the CAP REST/OData protocol.
+   * The handler decodes, extracts text, chunks, and creates KnowledgeDocument
+   * + KnowledgeChunk records. No LLM embedding occurs in Phase 4.
+   *
+   * Metadata fields (edition, release, country, etc.) are optional;
+   * they default to the KnowledgeSource's values when not provided.
    */
-  action exportRequirements(
-    projectId    : UUID,
-    workItemType : String
-  ) returns LargeString;
+  action ingestDocument(
+    knowledgeSourceId : UUID,
+    fileName          : String,
+    mimeType          : String,
+    contentBase64     : LargeString,
+    title             : String,
+    edition           : String,
+    release           : String,
+    country           : String,
+    industry          : String,
+    processArea       : String,
+    scopeItem         : String,
+    authorityLevel    : String,
+    docType           : String,
+    language          : String
+  ) returns IngestionJobs;
 
-  /** Submit a design request for assessment. */
+  /**
+   * Delete a knowledge source and all its associated documents/chunks.
+   */
+  action deleteKnowledgeSource(knowledgeSourceId : UUID) returns Boolean;
+
+  /**
+   * Delete a specific knowledge document and its chunks.
+   */
+  action deleteKnowledgeDocument(documentId : UUID) returns Boolean;
+
+  action importRequirements(projectId : UUID, csv : LargeString)
+    returns { imported: Integer; errorCount: Integer; errors: LargeString; };
+
+  action exportRequirements(projectId : UUID, workItemType : String)
+    returns LargeString;
+
   action submitForAssessment(designRequestId : UUID)
     returns ComplianceAssessments;
 
-  /** Human architect approval (rule 5). */
   action approveAssessment(assessmentId : UUID, notes : String)
     returns Boolean;
 
-  /** Reject and request revision. */
   action rejectAssessment(assessmentId : UUID, reason : String)
     returns Boolean;
 }
 
-// ─── Admin Service ────────────────────────────────────────────────────────────
-
 @path: '/api/v1/admin'
 service AdminService {
 
-  entity Tenants             as projection on nguard.Tenants
-    excluding { projects };
-  entity Projects            as projection on nguard.Projects;
+  entity Tenants               as projection on nguard.Tenants        excluding { projects };
+  entity Projects              as projection on nguard.Projects;
   entity SAPDeploymentProfiles as projection on nguard.SAPDeploymentProfiles;
-  entity UserActors          as projection on nguard.UserActors;
-  entity DesignRequests      as projection on nguard.DesignRequests;
-  entity RelatedWorkItems    as projection on nguard.RelatedWorkItems;
-
-  entity KnowledgeDocuments  as projection on nguard.KnowledgeDocuments
+  entity UserActors            as projection on nguard.UserActors;
+  entity DesignRequests        as projection on nguard.DesignRequests;
+  entity RelatedWorkItems      as projection on nguard.RelatedWorkItems;
+  entity KnowledgeSources      as projection on nguard.KnowledgeSources;
+  entity KnowledgeDocuments    as projection on nguard.KnowledgeDocuments
     excluding { embedding };
+  entity KnowledgeChunks       as projection on nguard.KnowledgeChunks
+    excluding { embedding };
+  entity IngestionJobs         as projection on nguard.IngestionJobs;
 
-  @readonly
-  entity AuditLogs as projection on nguard.AuditLogs;
+  @readonly entity AuditLogs   as projection on nguard.AuditLogs;
 
   action embedDocument(documentId : UUID) returns Boolean;
 }

@@ -32,6 +32,12 @@ import {
   handleImportRequirements,
   handleExportRequirements,
 } from './workspace-handler.js';
+import {
+  handleCreateKnowledgeSource,
+  handleIngestDocument,
+  handleDeleteKnowledgeSource,
+  handleDeleteKnowledgeDocument,
+} from './ingestion-handler.js';
 
 const { SELECT, INSERT } = cds.ql;
 
@@ -403,6 +409,36 @@ export default class NGuardServiceHandler extends cds.ApplicationService {
       });
 
       return true;
+    });
+
+    // ── Phase 4: Knowledge Ingestion actions ─────────────────────────────────
+    this.on('createKnowledgeSource', async (req: cds.Request) => {
+      const d = req.data as {
+        name?: string; description?: string; sourceType?: string;
+        authorityLevel?: string; baseUrl?: string; projectId?: string;
+      };
+      return handleCreateKnowledgeSource(req, d);
+    });
+
+    this.on('ingestDocument', async (req: cds.Request) => {
+      const d = req.data as {
+        knowledgeSourceId?: string; fileName?: string; mimeType?: string;
+        contentBase64?: string; title?: string; edition?: string;
+        release?: string; country?: string; industry?: string;
+        processArea?: string; scopeItem?: string; authorityLevel?: string;
+        docType?: string; language?: string;
+      };
+      return handleIngestDocument(req, d);
+    });
+
+    this.on('deleteKnowledgeSource', async (req: cds.Request) => {
+      const { knowledgeSourceId } = req.data as { knowledgeSourceId: string };
+      return handleDeleteKnowledgeSource(req, knowledgeSourceId);
+    });
+
+    this.on('deleteKnowledgeDocument', async (req: cds.Request) => {
+      const { documentId } = req.data as { documentId: string };
+      return handleDeleteKnowledgeDocument(req, documentId);
     });
 
     // ── Phase 3: Requirements Workspace validation hooks ─────────────────────

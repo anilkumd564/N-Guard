@@ -19,6 +19,10 @@ import type {
   ComplianceAssessment,
   CreateProjectPayload,
   CsvImportResult,
+  KnowledgeSource,
+  KnowledgeDocument,
+  KnowledgeChunk,
+  IngestionJob,
   ODataListResponse,
 } from '../types/api.js';
 
@@ -200,6 +204,109 @@ export async function exportRequirements(
       body   : JSON.stringify({ projectId, workItemType: workItemType ?? null }),
     },
   );
+  return result.value;
+}
+
+// ─── Knowledge Sources ────────────────────────────────────────────────────────
+
+export async function listKnowledgeSources(projectId?: string): Promise<KnowledgeSource[]> {
+  const filter = projectId ? `?$filter=project_ID eq ${projectId}` : '';
+  const data = await request<ODataListResponse<KnowledgeSource>>(`/KnowledgeSources${filter}`);
+  return data.value;
+}
+
+export async function createKnowledgeSource(payload: {
+  name: string; description?: string; sourceType?: string;
+  authorityLevel?: string; baseUrl?: string; projectId?: string;
+}): Promise<KnowledgeSource> {
+  const result = await request<{ value: KnowledgeSource }>('/createKnowledgeSource', {
+    method: 'POST', body: JSON.stringify(payload),
+  });
+  return result.value;
+}
+
+export async function deleteKnowledgeSource(knowledgeSourceId: string): Promise<boolean> {
+  const result = await request<{ value: boolean }>('/deleteKnowledgeSource', {
+    method: 'POST', body: JSON.stringify({ knowledgeSourceId }),
+  });
+  return result.value;
+}
+
+// ─── Knowledge Documents ──────────────────────────────────────────────────────
+
+export async function listKnowledgeDocuments(knowledgeSourceId?: string): Promise<KnowledgeDocument[]> {
+  const filter = knowledgeSourceId
+    ? `?$filter=knowledgeSource_ID eq ${knowledgeSourceId}&$orderby=createdAt desc`
+    : '?$orderby=createdAt desc';
+  const data = await request<ODataListResponse<KnowledgeDocument>>(`/KnowledgeDocuments${filter}`);
+  return data.value;
+}
+
+export async function deleteKnowledgeDocument(documentId: string): Promise<boolean> {
+  const result = await request<{ value: boolean }>('/deleteKnowledgeDocument', {
+    method: 'POST', body: JSON.stringify({ documentId }),
+  });
+  return result.value;
+}
+
+export async function listKnowledgeChunks(documentId: string): Promise<KnowledgeChunk[]> {
+  const encoded = encodeURIComponent(`document_ID eq ${documentId}`);
+  const data = await request<ODataListResponse<KnowledgeChunk>>(
+    `/KnowledgeChunks?$filter=${encoded}&$orderby=sequence asc`
+  );
+  return data.value;
+}
+
+export async function listIngestionJobs(knowledgeSourceId?: string): Promise<IngestionJob[]> {
+  const filter = knowledgeSourceId
+    ? `?$filter=knowledgeSource_ID eq ${knowledgeSourceId}&$orderby=createdAt desc`
+    : '?$orderby=createdAt desc';
+  const data = await request<ODataListResponse<IngestionJob>>(`/IngestionJobs${filter}`);
+  return data.value;
+}
+
+/**
+ * Ingest a document from a File object.
+ * Reads the file as ArrayBuffer, encodes to Base64, and posts to the
+ * ingestDocument action. Returns the created IngestionJob.
+ */
+export async function ingestDocument(payload: {
+  knowledgeSourceId : string;
+  file              : File;
+  title             : string;
+  edition?          : string;
+  release?          : string;
+  country?          : string;
+  industry?         : string;
+  processArea?      : string;
+  scopeItem?        : string;
+  authorityLevel?   : string;
+  docType?          : string;
+  language?         : string;
+}): Promise<IngestionJob> {
+  const arrayBuffer = await payload.file.arrayBuffer();
+  const uint8       = new Uint8Array(arrayBuffer);
+  const base64      = btoa(String.fromCharCode(...uint8));
+
+  const result = await request<{ value: IngestionJob }>('/ingestDocument', {
+    method: 'POST',
+    body  : JSON.stringify({
+      knowledgeSourceId : payload.knowledgeSourceId,
+      fileName          : payload.file.name,
+      mimeType          : payload.file.type || 'application/octet-stream',
+      contentBase64     : base64,
+      title             : payload.title,
+      edition           : payload.edition,
+      release           : payload.release,
+      country           : payload.country,
+      industry          : payload.industry,
+      processArea       : payload.processArea,
+      scopeItem         : payload.scopeItem,
+      authorityLevel    : payload.authorityLevel,
+      docType           : payload.docType,
+      language          : payload.language ?? 'EN',
+    }),
+  });
   return result.value;
 }
 

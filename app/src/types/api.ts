@@ -264,6 +264,114 @@ export interface ComplianceAssessment {
   recommendations? : Recommendation[];
 }
 
+// ─── Phase 4: Knowledge types ────────────────────────────────────────────────
+
+export type KnowledgeSourceType =
+  | 'SAP_HELP_PORTAL'
+  | 'SAP_BEST_PRACTICE'
+  | 'RELEASE_NOTE'
+  | 'PARTNER_CONTENT'
+  | 'INTERNAL_GUIDELINE'
+  | 'FILE_UPLOAD';
+
+export const KNOWLEDGE_SOURCE_TYPE_LABELS: Record<KnowledgeSourceType, string> = {
+  SAP_HELP_PORTAL    : 'SAP Help Portal',
+  SAP_BEST_PRACTICE  : 'SAP Best Practice Explorer',
+  RELEASE_NOTE       : 'Release Notes',
+  PARTNER_CONTENT    : 'Partner Content',
+  INTERNAL_GUIDELINE : 'Internal Guideline',
+  FILE_UPLOAD        : 'File Upload',
+};
+
+export type AuthorityLevel = 'SAP_OFFICIAL' | 'PARTNER' | 'INTERNAL';
+
+export const AUTHORITY_LEVEL_LABELS: Record<AuthorityLevel, string> = {
+  SAP_OFFICIAL : 'SAP Official Documentation',
+  PARTNER      : 'Certified Partner / SI Content',
+  INTERNAL     : 'Customer / Project-Internal',
+};
+
+export type IngestionStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'SKIPPED';
+
+export interface KnowledgeSource {
+  ID             : string;
+  tenant_ID?     : string;
+  project_ID?    : string;
+  name           : string;
+  description?   : string;
+  sourceType     : KnowledgeSourceType;
+  baseUrl?       : string;
+  authorityLevel : AuthorityLevel;
+  isActive       : boolean;
+  createdAt      : string;
+  modifiedAt     : string;
+}
+
+export interface KnowledgeDocument {
+  ID                : string;
+  tenant_ID?        : string;
+  project_ID?       : string;
+  knowledgeSource_ID?: string;
+  edition?          : S4Edition;
+  release?          : string;
+  title             : string;
+  content           : string;
+  source?           : string;
+  docType           : string;
+  authorityLevel    : AuthorityLevel;
+  country?          : string;
+  industry?         : string;
+  processArea?      : string;
+  processId?        : string;
+  scopeItem?        : string;
+  capability?       : string;
+  extensionType?    : string;
+  documentVersion?  : string;
+  documentDate?     : string;
+  language?         : string;
+  mimeType?         : string;
+  fileSizeBytes?    : number;
+  ingestionStatus   : IngestionStatus;
+  ingestionError?   : string;
+  chunkCount        : number;
+  isActive          : boolean;
+  createdAt         : string;
+  modifiedAt        : string;
+}
+
+export interface KnowledgeChunk {
+  ID             : string;
+  document_ID    : string;
+  sequence       : number;
+  text           : string;
+  tokenCount?    : number;
+  edition?       : S4Edition;
+  release?       : string;
+  country?       : string;
+  industry?      : string;
+  processArea?   : string;
+  scopeItem?     : string;
+  authorityLevel : AuthorityLevel;
+}
+
+export interface IngestionJob {
+  ID               : string;
+  tenant_ID?       : string;
+  project_ID?      : string;
+  knowledgeSource_ID?: string;
+  document_ID?     : string;
+  status           : IngestionStatus;
+  sourceFileName?  : string;
+  sourceMimeType?  : string;
+  extractedLength? : number;
+  chunkCount       : number;
+  error?           : string;
+  startedAt?       : string;
+  completedAt?     : string;
+  createdAt        : string;
+  modifiedAt       : string;
+}
+
 // ─── Project creation payload ─────────────────────────────────────────────────
 
 export interface CreateProjectPayload {

@@ -1,4 +1,9 @@
 # Dependencies
+# N-Guard development file storage — DEV ADAPTER ONLY (architecture rule 9)
+# This directory is written by LocalFileStorageProvider during local development.
+# It must never be committed to source control.
+local-storage/
+
 node_modules/
 **/node_modules/
 

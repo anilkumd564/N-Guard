@@ -1,0 +1,30 @@
+{
+  "name": "@n-guard/agent",
+  "version": "0.1.0",
+  "description": "N-Guard Agent Engine — modular TypeScript AI orchestration",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:watch": "tsc -p tsconfig.json --watch",
+    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint \"src/**/*.ts\""
+  },
+  "devDependencies": {
+    "@types/jest": "*",
+    "@types/node": "*",
+    "cross-env": "^7",
+    "jest": "*",
+    "ts-jest": "*",
+    "typescript": "*"
+  }
+}

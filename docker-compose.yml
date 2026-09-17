@@ -1,0 +1,58 @@
+version: '3.9'
+
+# ─── N-Guard Local Development Stack ─────────────────────────────────────────
+#
+# Services:
+#   backend  — SAP CAP Node.js server (port 4004)
+#   frontend — Vite React dev server  (port 5173)
+#
+# Architecture notes:
+#   - SQLite database is persisted in ./db/nguard.db (bind-mounted).
+#   - Production services (SAP HANA Cloud, XSUAA, AI Core) are NOT started here.
+#   - No credentials are stored in this file (rule 11).
+#
+# Usage:
+#   docker compose up              # start both services
+#   docker compose up backend      # backend only
+#   docker compose logs -f         # follow logs
+
+services:
+
+  backend:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/app/node_modules
+      - /app/agent/node_modules
+    ports:
+      - "4004:4004"
+    environment:
+      NODE_ENV: development
+      AI_PROVIDER: mock
+      VECTOR_STORE: mock
+      PORT: "4004"
+    command: >
+      sh -c "npm install && npm run dev"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4004/api/v1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app/app
+    volumes:
+      - .:/app
+      - /app/app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      NODE_ENV: development
+    command: >
+      sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    depends_on:
+      backend:
+        condition: service_healthy

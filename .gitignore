@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+**/dist/
+gen/
+**/gen/
+*.tsbuildinfo
+
+# SAP CAP
+db/nguard.db
+db/nguard.db-shm
+db/nguard.db-wal
+.cds-mtxs/
+@cds-models/
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage/
+**/coverage/
+
+# Docker volumes
+docker-volumes/
+
+# MTA build
+mta_archives/
+.mta/
+
+# SAP BTP credentials
+default-env.json
+
+# graphify-axet
+.graphify/

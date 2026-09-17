@@ -1,0 +1,50 @@
+{
+  "build": {
+    "tasks": [
+      {
+        "for": "node-cf",
+        "src": "srv",
+        "options": {
+          "model": ["db", "srv"]
+        }
+      },
+      {
+        "for": "hana",
+        "src": "db",
+        "options": {
+          "model": ["db", "srv"]
+        }
+      }
+    ]
+  },
+  "requires": {
+    "db": {
+      "[development]": {
+        "kind": "sqlite",
+        "credentials": { "url": "db/n-guard-dev.db" }
+      },
+      "[production]": {
+        "kind": "hana"
+      }
+    },
+    "auth": {
+      "[development]": {
+        "kind": "mocked"
+      },
+      "[production]": {
+        "kind": "xsuaa"
+      }
+    }
+  },
+  "features": {
+    "typescript": true
+  },
+  "server": {
+    "port": 4004
+  },
+  "log": {
+    "levels": {
+      "db": "warn"
+    }
+  }
+}

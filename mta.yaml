@@ -1,0 +1,131 @@
+_schema-version: "3.3"
+ID: n-guard
+version: 0.1.0
+description: "N-Guard — SAP Fit-to-Standard Compliance Agent"
+
+# ─── Build Parameters ─────────────────────────────────────────────────────────
+build-parameters:
+  before-all:
+    - builder: custom
+      commands:
+        - npm ci --prefix srv
+        - npm ci --prefix agent
+        - npm run build:srv
+        - npm run build:agent
+        - npm run build:app
+
+# ─── Modules ──────────────────────────────────────────────────────────────────
+modules:
+
+  # ── N-Guard API Server (CAP Node.js) ──────────────────────────────────────
+  - name: n-guard-srv
+    type: nodejs
+    path: .
+    parameters:
+      buildpack: nodejs_buildpack
+      memory: 512M
+      disk-quota: 1G
+    build-parameters:
+      builder: npm-ci
+      build-result: .
+      ignore:
+        - node_modules/
+        - app/
+        - "*.sqlite"
+        - ".env"
+    properties:
+      # Production node environment
+      NODE_ENV: production
+      # CAP production profile
+      CDS_ENV: production
+      # SAP AI Core model configuration
+      AICORE_MODEL_NAME: gpt-4o
+      AICORE_DEPLOYMENT_ID: "{{placeholder:AICORE_DEPLOYMENT_ID}}"
+      # File size guard (bytes) — 10 MB
+      MAX_INGEST_FILE_BYTES: "10485760"
+      # Prompt size guard (characters)
+      MAX_PROMPT_CHARS: "32000"
+    requires:
+      - name: n-guard-xsuaa
+        group: VCAP_SERVICES
+        properties:
+          xsuaa: ~{uaa-credentials}
+      - name: n-guard-hana
+        group: VCAP_SERVICES
+        properties:
+          hana: ~{hana-credentials}
+      - name: n-guard-destination
+        group: VCAP_SERVICES
+        properties:
+          destination: ~{destination-credentials}
+      - name: n-guard-aicore
+        group: VCAP_SERVICES
+        properties:
+          aicore: ~{aicore-credentials}
+    provides:
+      - name: srv-api
+        properties:
+          srv-url: ${default-url}
+
+  # ── N-Guard Frontend (React SPA via static file serving) ──────────────────
+  - name: n-guard-app
+    type: html5
+    path: app/dist
+    parameters:
+      memory: 128M
+      disk-quota: 256M
+    build-parameters:
+      builder: custom
+      commands:
+        - npm run build --prefix app
+      supported-platforms: []
+    requires:
+      - name: n-guard-xsuaa
+      - name: srv-api
+        group: destinations
+        properties:
+          name: n-guard-api
+          url: ~{srv-url}
+          forwardAuthToken: true
+
+# ─── Resources ────────────────────────────────────────────────────────────────
+resources:
+
+  # ── XSUAA (Authentication & Authorization) ────────────────────────────────
+  - name: n-guard-xsuaa
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: xsuaa
+      service-plan: application
+      path: xs-security.json
+    properties:
+      uaa-credentials: ~{credentials}
+
+  # ── SAP HANA Cloud (Database) ─────────────────────────────────────────────
+  - name: n-guard-hana
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: hana
+      service-plan: hdi-shared
+    properties:
+      hana-credentials: ~{credentials}
+
+  # ── SAP Destination Service ───────────────────────────────────────────────
+  - name: n-guard-destination
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: destination
+      service-plan: lite
+    properties:
+      destination-credentials: ~{credentials}
+
+  # ── SAP AI Core ───────────────────────────────────────────────────────────
+  # The AI Core service binding provides the credentials for Generative AI Hub.
+  # Configure the specific deployment ID in the application properties above.
+  - name: n-guard-aicore
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: aicore
+      service-plan: extended
+    properties:
+      aicore-credentials: ~{credentials}

@@ -29,4 +29,25 @@ service AppService {
     phase       : String;
   };
 
+  /**
+   * Health check — used by BTP load balancer and application router.
+   * Returns status 'ok' and uptime in seconds when the service is healthy.
+   */
+  function health() returns {
+    status    : String;
+    timestamp : String;
+    version   : String;
+    uptime    : Decimal;
+  };
+
+  /**
+   * Readiness probe — indicates application has completed startup.
+   * Distinct from health (liveness probe).
+   * Returns ready: true + a JSON-serialized checks object.
+   */
+  function ready() returns {
+    ready  : Boolean;
+    checks : LargeString;
+  };
+
 }

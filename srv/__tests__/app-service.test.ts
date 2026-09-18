@@ -10,6 +10,8 @@
  * the full CDS bootstrap lifecycle).
  */
 
+import { describe, it, expect } from '@jest/globals';
+
 // ── Response shape helpers ────────────────────────────────────────────────────
 
 /** Mirrors what AppServiceHandler.ping() returns */
@@ -26,7 +28,7 @@ function makeInfoResponse(): { name: string; version: string; environment: strin
     name        : 'n-guard',
     version     : process.env.npm_package_version ?? '0.1.0',
     environment : process.env.NODE_ENV ?? 'development',
-      phase       : '13 — Security, Tenant Isolation, and Production Controls',
+      phase       : '14 — BTP Deployment Preparation',
   };
 }
 
@@ -54,7 +56,40 @@ describe('AppService — info response', () => {
     expect(makeInfoResponse().version.length).toBeGreaterThan(0);
   });
 
-  it('phase label references Phase 13', () => {
-    expect(makeInfoResponse().phase).toContain('13');
+  it('phase label references Phase 14', () => {
+    expect(makeInfoResponse().phase).toContain('14');
+  });
+});
+
+describe('AppService — health response', () => {
+  function makeHealthResponse() {
+    return { status: 'ok', timestamp: new Date().toISOString(), version: '0.1.0', uptime: process.uptime() };
+  }
+
+  it('status is ok', () => {
+    expect(makeHealthResponse().status).toBe('ok');
+  });
+
+  it('uptime is a non-negative number', () => {
+    expect(makeHealthResponse().uptime).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('AppService — ready response', () => {
+  function makeReadyResponse() {
+    return {
+      ready  : true,
+      checks : JSON.stringify({ server: 'ok', env: process.env.NODE_ENV ?? 'development' }),
+    };
+  }
+
+  it('ready is true', () => {
+    expect(makeReadyResponse().ready).toBe(true);
+  });
+
+  it('checks is valid JSON', () => {
+    const r = makeReadyResponse();
+    expect(() => JSON.parse(r.checks)).not.toThrow();
+    expect(JSON.parse(r.checks).server).toBe('ok');
   });
 });

@@ -1,0 +1,140 @@
+{
+  "xsappname": "n-guard",
+  "tenant-mode": "dedicated",
+  "description": "N-Guard — Fit-to-Standard Compliance Agent",
+  "scopes": [
+    {
+      "name": "$XSAPPNAME.user",
+      "description": "Read-only access to requirements and assessments"
+    },
+    {
+      "name": "$XSAPPNAME.functional_lead",
+      "description": "Create/edit requirements; submit for assessment"
+    },
+    {
+      "name": "$XSAPPNAME.solution_architect",
+      "description": "Run assessments, comparisons, Clean Core analyses"
+    },
+    {
+      "name": "$XSAPPNAME.design_authority",
+      "description": "Approve/reject assessments; record review decisions"
+    },
+    {
+      "name": "$XSAPPNAME.project_admin",
+      "description": "Manage project settings, deployment profiles, knowledge"
+    },
+    {
+      "name": "$XSAPPNAME.platform_admin",
+      "description": "Tenant-level administration, all projects"
+    }
+  ],
+  "role-templates": [
+    {
+      "name": "NGuard_User",
+      "description": "N-Guard User — read-only access",
+      "scope-references": [
+        "$XSAPPNAME.user"
+      ]
+    },
+    {
+      "name": "NGuard_FunctionalLead",
+      "description": "N-Guard Functional Lead — requirements management",
+      "scope-references": [
+        "$XSAPPNAME.user",
+        "$XSAPPNAME.functional_lead"
+      ]
+    },
+    {
+      "name": "NGuard_SolutionArchitect",
+      "description": "N-Guard Solution Architect — assessment and analysis",
+      "scope-references": [
+        "$XSAPPNAME.user",
+        "$XSAPPNAME.functional_lead",
+        "$XSAPPNAME.solution_architect"
+      ]
+    },
+    {
+      "name": "NGuard_DesignAuthority",
+      "description": "N-Guard Design Authority — governance decisions",
+      "scope-references": [
+        "$XSAPPNAME.user",
+        "$XSAPPNAME.functional_lead",
+        "$XSAPPNAME.solution_architect",
+        "$XSAPPNAME.design_authority"
+      ]
+    },
+    {
+      "name": "NGuard_ProjectAdmin",
+      "description": "N-Guard Project Administrator",
+      "scope-references": [
+        "$XSAPPNAME.user",
+        "$XSAPPNAME.functional_lead",
+        "$XSAPPNAME.solution_architect",
+        "$XSAPPNAME.design_authority",
+        "$XSAPPNAME.project_admin"
+      ]
+    },
+    {
+      "name": "NGuard_PlatformAdmin",
+      "description": "N-Guard Platform Administrator — full access",
+      "scope-references": [
+        "$XSAPPNAME.user",
+        "$XSAPPNAME.functional_lead",
+        "$XSAPPNAME.solution_architect",
+        "$XSAPPNAME.design_authority",
+        "$XSAPPNAME.project_admin",
+        "$XSAPPNAME.platform_admin"
+      ]
+    }
+  ],
+  "role-collections": [
+    {
+      "name": "N-Guard User",
+      "description": "N-Guard read-only user",
+      "role-template-references": [
+        "$XSAPPNAME.NGuard_User"
+      ]
+    },
+    {
+      "name": "N-Guard Functional Lead",
+      "description": "N-Guard Functional Lead",
+      "role-template-references": [
+        "$XSAPPNAME.NGuard_FunctionalLead"
+      ]
+    },
+    {
+      "name": "N-Guard Solution Architect",
+      "description": "N-Guard Solution Architect",
+      "role-template-references": [
+        "$XSAPPNAME.NGuard_SolutionArchitect"
+      ]
+    },
+    {
+      "name": "N-Guard Design Authority",
+      "description": "N-Guard Design Authority",
+      "role-template-references": [
+        "$XSAPPNAME.NGuard_DesignAuthority"
+      ]
+    },
+    {
+      "name": "N-Guard Project Admin",
+      "description": "N-Guard Project Administrator",
+      "role-template-references": [
+        "$XSAPPNAME.NGuard_ProjectAdmin"
+      ]
+    },
+    {
+      "name": "N-Guard Platform Admin",
+      "description": "N-Guard Platform Administrator",
+      "role-template-references": [
+        "$XSAPPNAME.NGuard_PlatformAdmin"
+      ]
+    }
+  ],
+  "oauth2-configuration": {
+    "token-validity": 43200,
+    "refresh-token-validity": 604800,
+    "autoapprove": false,
+    "credential-types": ["binding-secret", "x509"]
+  }
+}

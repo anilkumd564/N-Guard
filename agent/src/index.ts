@@ -62,6 +62,25 @@ export type {
   HttpMethod,
 } from './providers/IntegrationProvider.js';
 
+// Phase 7: Fit-to-Standard Assessment
+export { FitAssessmentEngine }  from './assessment/FitAssessmentEngine.js';
+export { MockFitAIProvider }    from './assessment/MockFitAIProvider.js';
+export type {
+  FitClassification,
+  DeploymentCompatibilityCode,
+  EvidenceConfidence,
+  FitAssessmentResult,
+} from './assessment/types.js';
+export {
+  ALL_FIT_CLASSIFICATIONS,
+  ALL_DEPLOYMENT_CODES,
+  ALL_CONFIDENCE_LEVELS,
+  FIT_CLASSIFICATION_LABELS,
+  FIT_CLASSIFICATION_DESCRIPTIONS,
+  DEPLOYMENT_CODE_LABELS,
+  CONFIDENCE_LABELS,
+} from './assessment/types.js';
+
 // Phase 6: Orchestration
 export { AgentOrchestrator }  from './orchestration/AgentOrchestrator.js';
 export type {

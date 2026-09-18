@@ -44,6 +44,68 @@ export function getAgentOrchestrator() {
 }
 
 /**
+ * Get the FitAssessmentEngine for Phase 7 F1-F8 structured assessments.
+ */
+export function getFitAssessmentEngine() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { FitAssessmentEngine, KnowledgeSearchService } = require('@n-guard/agent') as {
+    FitAssessmentEngine  : new (deps: {
+      aiProvider            : unknown;
+      knowledgeSearchService: unknown;
+      options?              : Record<string, unknown>;
+    }) => {
+      assess(input: unknown, context: unknown): Promise<{
+        result: {
+          fitClassification          : string;
+          deploymentCompatibility    : string;
+          evidenceConfidence         : string;
+          confidence                 : number;
+          businessIntentSummary      : string;
+          processClassification      : string;
+          targetDeploymentContext    : string;
+          standardCapability?        : string;
+          gapDescription?            : string;
+          configurationOpportunity?  : string;
+          customizationRiskStatement?: string;
+          recommendedNextAction      : string;
+          recommendations            : unknown[];
+          evidenceReferences         : unknown[];
+          assumptions                : string[];
+          unknowns                   : string[];
+          humanReviewRequired        : boolean;
+          validationPassed           : boolean;
+          agentRunId                 : string;
+          schemaVersion              : string;
+        };
+        run: {
+          id              : string;
+          status          : string;
+          error?          : string;
+          modelProvider   : string;
+          modelName       : string;
+          promptTokens    : number;
+          completionTokens: number;
+          latencyMs       : number;
+          retryCount      : number;
+          evidenceCount   : number;
+          schemaVersion   : string;
+          validationPassed: boolean;
+          startedAt       : string;
+          completedAt?    : string;
+        };
+      }>;
+    };
+    KnowledgeSearchService: new (deps: { store: unknown; aiProvider: unknown }) => unknown;
+  };
+
+  const aiProvider = resolveAIProvider();
+  const store      = resolveVectorStore();
+  const search     = new KnowledgeSearchService({ store, aiProvider });
+
+  return new FitAssessmentEngine({ aiProvider, knowledgeSearchService: search });
+}
+
+/**
  * Returns the singleton AgentEngine.
  * Lazily initialised on first call with providers resolved from env vars.
  */

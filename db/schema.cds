@@ -198,6 +198,22 @@ entity ComplianceAssessments : cuid, managed {
   confidence      : Decimal(4, 3);
   agentVersion    : String(50);
   processedAt     : Timestamp;
+  // Phase 7: F1-F8 Fit Classification fields
+  fitClassification          : String(5);    // F1|F2|F3|F4|F5|F6|F7|F8
+  deploymentCompatibility    : String(20);   // DP-OP|DP-PCE|DP-PUB|DP-ALL|DP-NA|DP-VERIFY
+  evidenceConfidence         : String(30);   // VERIFIED|LIKELY|NEEDS_SME_REVIEW|INSUFFICIENT_EVIDENCE
+  businessIntentSummary      : String(1000);
+  processClassification      : String(200);
+  targetDeploymentContext    : String(500);
+  standardCapability         : String(500);
+  gapDescription             : LargeString;
+  configurationOpportunity   : LargeString;
+  customizationRiskStatement : LargeString;
+  recommendedNextAction      : String(1000);
+  assumptions                : LargeString; // JSON: string[]
+  unknowns                   : LargeString; // JSON: string[]
+  humanReviewRequired        : Boolean default false;
+  agentSchemaVersion         : String(10);  // '1.0' (Phase 6) or '2.0' (Phase 7)
   recommendations : Composition of many Recommendations
                       on recommendations.assessment = $self;
 }

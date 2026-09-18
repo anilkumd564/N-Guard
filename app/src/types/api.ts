@@ -247,6 +247,39 @@ export interface Recommendation {
   rationale?    : string;
 }
 
+// ─── Phase 7: F1-F8 Fit Classification types ─────────────────────────────────
+
+export type FitClassification = 'F1' | 'F2' | 'F3' | 'F4' | 'F5' | 'F6' | 'F7' | 'F8';
+export type DeploymentCompatibilityCode = 'DP-OP' | 'DP-PCE' | 'DP-PUB' | 'DP-ALL' | 'DP-NA' | 'DP-VERIFY';
+export type EvidenceConfidence = 'VERIFIED' | 'LIKELY' | 'NEEDS_SME_REVIEW' | 'INSUFFICIENT_EVIDENCE';
+
+export const FIT_CLASSIFICATION_LABELS: Record<FitClassification, string> = {
+  F1: 'F1 — Standard Fit',           F2: 'F2 — Configuration Fit',
+  F3: 'F3 — Standard + Minor Ext.',  F4: 'F4 — Clean Core Extension',
+  F5: 'F5 — Standardization Opp.',   F6: 'F6 — Customization Risk',
+  F7: 'F7 — Business Differentiator',F8: 'F8 — Insufficient Evidence',
+};
+
+export const FIT_CLASSIFICATION_COLORS: Record<FitClassification, string> = {
+  F1: '#22c55e',  // green
+  F2: '#86efac',  // light green
+  F3: '#facc15',  // yellow
+  F4: '#fb923c',  // orange
+  F5: '#60a5fa',  // blue
+  F6: '#f87171',  // red
+  F7: '#a78bfa',  // purple
+  F8: '#94a3b8',  // gray
+};
+
+export const CONFIDENCE_LABELS: Record<EvidenceConfidence, string> = {
+  VERIFIED              : 'Verified',
+  LIKELY                : 'Likely',
+  NEEDS_SME_REVIEW      : 'Needs SME Review',
+  INSUFFICIENT_EVIDENCE : 'Insufficient Evidence',
+};
+
+// ─── Assessment (Phase 7 enhanced) ───────────────────────────────────────────
+
 export interface ComplianceAssessment {
   ID               : string;
   designRequest_ID : string;
@@ -262,6 +295,22 @@ export interface ComplianceAssessment {
   createdAt        : string;
   modifiedAt       : string;
   recommendations? : Recommendation[];
+  // Phase 7: F1-F8 fields
+  fitClassification?         : FitClassification;
+  deploymentCompatibility?   : DeploymentCompatibilityCode;
+  evidenceConfidence?        : EvidenceConfidence;
+  businessIntentSummary?     : string;
+  processClassification?     : string;
+  targetDeploymentContext?   : string;
+  standardCapability?        : string;
+  gapDescription?            : string;
+  configurationOpportunity?  : string;
+  customizationRiskStatement?: string;
+  recommendedNextAction?     : string;
+  assumptions?               : string;  // JSON: string[]
+  unknowns?                  : string;  // JSON: string[]
+  humanReviewRequired?       : boolean;
+  agentSchemaVersion?        : string;
 }
 
 // ─── Phase 4: Knowledge types ────────────────────────────────────────────────

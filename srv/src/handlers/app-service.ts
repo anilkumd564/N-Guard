@@ -19,7 +19,7 @@ export default class AppServiceHandler extends cds.ApplicationService {
       name        : 'n-guard',
       version     : process.env.npm_package_version ?? '0.1.0',
       environment : process.env.NODE_ENV ?? 'development',
-      phase       : '6 — N-Guard Agent Orchestration Core',
+      phase       : '7 — Fit-to-Standard Assessment Engine',
     }));
 
     await super.init();

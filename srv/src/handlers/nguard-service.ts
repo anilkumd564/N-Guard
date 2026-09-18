@@ -1,433 +1,238 @@
 /**
  * N-Guard — NGuardService Handler
  *
- * This file registers CAP event handlers for NGuardService.
- *
- * Architecture rules respected here:
- *  - Rule 2:  Edition is never inferred; validation rejects missing/invalid editions.
- *  - Rule 5:  Approve/Reject actions are recorded and audited; the agent does not
- *             override human decisions.
- *  - Rule 6:  Agent Engine is invoked through an injected interface, never directly
- *             imported from a framework-coupled path.
- *  - Rule 10: All queries are scoped by tenant_id and project_id.
- *
- * Phase 2 additions:
- *  - before('CREATE', 'Projects') — server-side validation of edition + fields.
- *  - before('UPDATE', 'Projects') — server-side validation on edit.
- *  - before('CREATE', 'SAPDeploymentProfiles') — profile validation.
- *  - before('UPDATE', 'SAPDeploymentProfiles') — profile validation on edit.
- *  - createProject action — single-call project + profile creation with tenant resolution.
+ * Phase 7: FitAssessmentEngine produces F1-F8 structured assessments.
+ * Phase 6: AgentOrchestrator used as legacy fallback.
+ * Phases 2-5: Project/profile CRUD, knowledge ingestion, requirements workspace.
  */
 
 import cds from '@sap/cds';
 import { createAuditLog } from '../lib/audit.js';
-import { getAgentEngine, getAgentOrchestrator } from '../lib/agent-factory.js';
+import { getAgentEngine, getAgentOrchestrator, getFitAssessmentEngine } from '../lib/agent-factory.js';
 import type { AssessmentRecommendation } from '../types/agent.js';
-import {
-  validateProject,
-  validateDeploymentProfile,
-} from '../types/domain.js';
-import {
-  registerWorkspaceValidation,
-  handleImportRequirements,
-  handleExportRequirements,
-} from './workspace-handler.js';
-import {
-  handleCreateKnowledgeSource,
-  handleIngestDocument,
-  handleDeleteKnowledgeSource,
-  handleDeleteKnowledgeDocument,
-} from './ingestion-handler.js';
+import { validateProject, validateDeploymentProfile } from '../types/domain.js';
+import { registerWorkspaceValidation, handleImportRequirements, handleExportRequirements } from './workspace-handler.js';
+import { handleCreateKnowledgeSource, handleIngestDocument, handleDeleteKnowledgeSource, handleDeleteKnowledgeDocument } from './ingestion-handler.js';
 
 const { SELECT, INSERT } = cds.ql;
 
-/**
- * Typed wrapper for CAP's UPDATE query builder.
- */
 function update(entity: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (cds.ql.UPDATE as unknown as (e: string) => ReturnType<typeof cds.ql.UPDATE.entity>)(entity);
 }
 
-// ─── Development tenant auto-resolution ──────────────────────────────────────
 const DEV_TENANT_NAME = 'Development Tenant';
-
-/**
- * Resolve or create the development tenant.
- * In production, the tenant ID comes from the XSUAA context (Phase 13).
- */
 async function resolveDevTenant(): Promise<string> {
-  let tenant = await SELECT.one
-    .from('nguard.Tenants')
-    .where({ name: DEV_TENANT_NAME })
-    .columns('ID');
-
+  let tenant = await SELECT.one.from('nguard.Tenants').where({ name: DEV_TENANT_NAME }).columns('ID');
   if (!tenant) {
-    await INSERT.into('nguard.Tenants').entries({
-      name        : DEV_TENANT_NAME,
-      description : 'Auto-created development tenant. Replace with real tenant in production.',
-      isActive    : true,
-    });
-    tenant = await SELECT.one
-      .from('nguard.Tenants')
-      .where({ name: DEV_TENANT_NAME })
-      .columns('ID');
+    await INSERT.into('nguard.Tenants').entries({ name: DEV_TENANT_NAME, description: 'Auto-created dev tenant.', isActive: true });
+    tenant = await SELECT.one.from('nguard.Tenants').where({ name: DEV_TENANT_NAME }).columns('ID');
   }
-
-  if (!tenant?.ID) {
-    throw new Error('Failed to resolve development tenant');
-  }
-
+  if (!tenant?.ID) throw new Error('Failed to resolve development tenant');
   return tenant.ID as string;
 }
-
-// ─── Handler ──────────────────────────────────────────────────────────────────
 
 export default class NGuardServiceHandler extends cds.ApplicationService {
   async init() {
 
-    // ── Project validation: before CREATE ────────────────────────────────────
+    // ── Project validation ────────────────────────────────────────────────────
     this.before('CREATE', 'Projects', (req: cds.Request) => {
       const data = req.data as Record<string, unknown>;
-      const result = validateProject({
-        name               : data['name'] as string,
-        edition            : data['edition'] as string,
-        release            : data['release'] as string | undefined,
-        transformationType : data['transformationType'] as string | undefined,
-        cleanCorePolicy    : data['cleanCorePolicy'] as string | undefined,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-
-      if (!result.valid) {
-        const messages = result.errors.map(e => `${e.field}: ${e.message}`).join('; ');
-        return req.error(400, `Project validation failed — ${messages}`);
-      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = validateProject(data as any);
+      if (!result.valid) return req.error(400, `Project validation failed — ${result.errors.map(e => `${e.field}: ${e.message}`).join('; ')}`);
     });
 
-    // ── Project validation: before UPDATE ────────────────────────────────────
     this.before('UPDATE', 'Projects', (req: cds.Request) => {
       const data = req.data as Record<string, unknown>;
-      const updatePayload: Record<string, unknown> = {};
-      if (data['name']               !== undefined) updatePayload['name']               = data['name'];
-      if (data['edition']            !== undefined) updatePayload['edition']            = data['edition'];
-      if (data['release']            !== undefined) updatePayload['release']            = data['release'];
-      if (data['transformationType'] !== undefined) updatePayload['transformationType'] = data['transformationType'];
-      if (data['cleanCorePolicy']    !== undefined) updatePayload['cleanCorePolicy']    = data['cleanCorePolicy'];
-
+      const p: Record<string, unknown> = {};
+      ['name','edition','release','transformationType','cleanCorePolicy'].forEach(k => { if (data[k] !== undefined) p[k] = data[k]; });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = validateProject(updatePayload as any);
-      if (!result.valid) {
-        const messages = result.errors.map(e => `${e.field}: ${e.message}`).join('; ');
-        return req.error(400, `Project validation failed — ${messages}`);
-      }
+      const result = validateProject(p as any);
+      if (!result.valid) return req.error(400, `Project validation failed — ${result.errors.map(e => `${e.field}: ${e.message}`).join('; ')}`);
     });
 
-    // ── Deployment profile validation: before CREATE ─────────────────────────
     this.before('CREATE', 'SAPDeploymentProfiles', (req: cds.Request) => {
       const data = req.data as Record<string, unknown>;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = validateDeploymentProfile(data as any);
-      if (!result.valid) {
-        const messages = result.errors.map(e => `${e.field}: ${e.message}`).join('; ');
-        return req.error(400, `Deployment profile validation failed — ${messages}`);
-      }
+      if (!result.valid) return req.error(400, `Deployment profile validation failed — ${result.errors.map(e => `${e.field}: ${e.message}`).join('; ')}`);
     });
 
-    // ── Deployment profile validation: before UPDATE ─────────────────────────
     this.before('UPDATE', 'SAPDeploymentProfiles', (req: cds.Request) => {
       const data = req.data as Record<string, unknown>;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = validateDeploymentProfile(data as any);
-      if (!result.valid) {
-        const messages = result.errors.map(e => `${e.field}: ${e.message}`).join('; ');
-        return req.error(400, `Deployment profile validation failed — ${messages}`);
-      }
+      if (!result.valid) return req.error(400, `Deployment profile validation failed — ${result.errors.map(e => `${e.field}: ${e.message}`).join('; ')}`);
     });
 
     // ── createProject ─────────────────────────────────────────────────────────
     this.on('createProject', async (req: cds.Request) => {
       const d = req.data as {
-        name                   : string;
-        description?           : string;
-        edition                : string;
-        release?               : string;
-        transformationType?    : string;
-        cleanCorePolicy?       : string;
-        profileName?           : string;
-        deploymentModel?       : string;
-        profileRelease?        : string;
-        country?               : string;
-        industry?              : string;
-        processAreas?          : string;
-        sourceSystemDescription?: string;
+        name: string; description?: string; edition: string; release?: string;
+        transformationType?: string; cleanCorePolicy?: string; profileName?: string;
+        deploymentModel?: string; profileRelease?: string; country?: string;
+        industry?: string; processAreas?: string; sourceSystemDescription?: string;
       };
-
-      // Validate project fields
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const projValidation = validateProject(d as any);
-      if (!projValidation.valid) {
-        const messages = projValidation.errors.map(e => `${e.field}: ${e.message}`).join('; ');
-        return req.error(400, `Project validation failed — ${messages}`);
-      }
+      const pv = validateProject(d as any);
+      if (!pv.valid) return req.error(400, `Project validation failed — ${pv.errors.map(e => `${e.field}: ${e.message}`).join('; ')}`);
 
-      // Validate deployment profile fields if a profile name or model is supplied
-      const effectiveProfileName  = d.profileName?.trim() || d.name.trim();
-      const effectiveDeployModel  = d.deploymentModel || d.edition;
+      const profileName  = d.profileName?.trim() || d.name.trim();
+      const deployModel  = d.deploymentModel || d.edition;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dv = validateDeploymentProfile({ profileName, deploymentModel: deployModel, release: d.profileRelease, transformationType: d.transformationType, cleanCorePolicy: d.cleanCorePolicy } as any);
+      if (!dv.valid) return req.error(400, `Deployment profile validation failed — ${dv.errors.map(e => `${e.field}: ${e.message}`).join('; ')}`);
 
-      const profValidation = validateDeploymentProfile({
-        profileName    : effectiveProfileName,
-        deploymentModel: effectiveDeployModel as string,
-        release        : d.profileRelease,
-        transformationType: d.transformationType as string | undefined,
-        cleanCorePolicy   : d.cleanCorePolicy   as string | undefined,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-      if (!profValidation.valid) {
-        const messages = profValidation.errors.map(e => `${e.field}: ${e.message}`).join('; ');
-        return req.error(400, `Deployment profile validation failed — ${messages}`);
-      }
-
-      // Resolve tenant
       let tenantId: string;
-      try {
-        tenantId = await resolveDevTenant();
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return req.error(500, `Tenant resolution failed: ${msg}`);
-      }
+      try { tenantId = await resolveDevTenant(); }
+      catch (e) { return req.error(500, `Tenant resolution failed: ${e instanceof Error ? e.message : String(e)}`); }
 
-      // Insert project
       await INSERT.into('nguard.Projects').entries({
-        tenant_ID          : tenantId,
-        name               : d.name.trim(),
-        description        : d.description ?? null,
-        edition            : d.edition,
-        release            : d.release ?? null,
-        status             : 'ACTIVE',
-        transformationType : d.transformationType ?? null,
-        cleanCorePolicy    : d.cleanCorePolicy ?? 'NOT_SET',
+        tenant_ID: tenantId, name: d.name.trim(), description: d.description ?? null,
+        edition: d.edition, release: d.release ?? null, status: 'ACTIVE',
+        transformationType: d.transformationType ?? null, cleanCorePolicy: d.cleanCorePolicy ?? 'NOT_SET',
       });
 
-      // Re-query for the created project (most reliable way to get the generated UUID)
-      const project = await SELECT.one
-        .from('nguard.Projects')
+      const project = await SELECT.one.from('nguard.Projects')
         .where({ tenant_ID: tenantId, name: d.name.trim() })
-        .columns('ID', 'tenant_ID', 'name', 'description', 'edition', 'release',
-                 'status', 'transformationType', 'cleanCorePolicy',
-                 'createdAt', 'modifiedAt');
+        .columns('ID','tenant_ID','name','description','edition','release','status','transformationType','cleanCorePolicy','createdAt','modifiedAt');
+      if (!project?.ID) return req.error(500, 'Failed to retrieve created project');
 
-      if (!project?.ID) {
-        return req.error(500, 'Failed to retrieve created project');
-      }
-
-      // Insert deployment profile
       await INSERT.into('nguard.SAPDeploymentProfiles').entries({
-        project_ID              : project.ID,
-        tenant_ID               : tenantId,
-        profileName             : effectiveProfileName,
-        sapProduct              : 'S4HANA',
-        deploymentModel         : effectiveDeployModel,
-        release                 : d.profileRelease ?? d.release ?? null,
-        country                 : d.country ?? null,
-        industry                : d.industry ?? null,
-        transformationType      : d.transformationType ?? null,
-        cleanCorePolicy         : d.cleanCorePolicy ?? 'NOT_SET',
-        processAreas            : d.processAreas ?? null,
-        sourceSystemDescription : d.sourceSystemDescription ?? null,
-        isPrimary               : true,
-        isActive                : true,
+        project_ID: project.ID, tenant_ID: tenantId, profileName, sapProduct: 'S4HANA',
+        deploymentModel: deployModel, release: d.profileRelease ?? d.release ?? null,
+        country: d.country ?? null, industry: d.industry ?? null,
+        transformationType: d.transformationType ?? null, cleanCorePolicy: d.cleanCorePolicy ?? 'NOT_SET',
+        processAreas: d.processAreas ?? null, sourceSystemDescription: d.sourceSystemDescription ?? null,
+        isPrimary: true, isActive: true,
       });
 
-      // Audit log
-      await createAuditLog(req, {
-        entityType : 'Project',
-        entityId   : project.ID as string,
-        action     : 'CREATE',
-        details    : JSON.stringify({ name: d.name, edition: d.edition }),
-      });
-
+      await createAuditLog(req, { entityType: 'Project', entityId: project.ID as string, action: 'CREATE', details: JSON.stringify({ name: d.name, edition: d.edition }) });
       return project;
     });
 
-    // ── submitForAssessment ──────────────────────────────────────────────────
+    // ── submitForAssessment ───────────────────────────────────────────────────
     this.on('submitForAssessment', async (req: cds.Request) => {
       const { designRequestId } = req.data as { designRequestId: string };
+      if (!designRequestId) return req.error(400, 'designRequestId is required');
 
-      if (!designRequestId) {
-        return req.error(400, 'designRequestId is required');
-      }
-
-      const dr = await SELECT.one
-        .from('nguard.DesignRequests')
-        .where({ ID: designRequestId })
-        .columns('ID', 'title', 'description', 'businessProcess', 'module',
-                 'status', 'tenant_ID', 'project_ID');
-
+      const dr = await SELECT.one.from('nguard.DesignRequests').where({ ID: designRequestId })
+        .columns('ID','title','description','businessProcess','module','status','tenant_ID','project_ID');
       if (!dr) return req.error(404, `DesignRequest ${designRequestId} not found`);
       if (dr.status === 'ASSESSING') return req.error(409, 'Already under assessment');
       if (dr.status === 'ASSESSED')  return req.error(409, 'Already assessed — create a new revision');
 
-      const project = await SELECT.one
-        .from('nguard.Projects')
-        .where({ ID: dr.project_ID })
-        .columns('ID', 'edition', 'release', 'tenant_ID');
-
+      const project = await SELECT.one.from('nguard.Projects').where({ ID: dr.project_ID })
+        .columns('ID','edition','release','tenant_ID');
       if (!project) return req.error(404, `Project ${dr.project_ID} not found`);
 
-      const assessmentData = {
-        designRequest_ID : designRequestId,
-        project_ID       : dr.project_ID,
-        tenant_ID        : dr.tenant_ID,
-        status           : 'PENDING',
-        agentVersion     : '0.1.0',
-      };
-      const [assessment] = await INSERT.into('nguard.ComplianceAssessments').entries(assessmentData);
-
-      await update('nguard.DesignRequests')
-        .set({ status: 'ASSESSING' })
-        .where({ ID: designRequestId });
-
-      await createAuditLog(req, {
-        entityType : 'DesignRequest',
-        entityId   : designRequestId,
-        action     : 'SUBMIT',
-        details    : JSON.stringify({ assessmentId: assessment?.ID }),
+      const [assessment] = await INSERT.into('nguard.ComplianceAssessments').entries({
+        designRequest_ID: designRequestId, project_ID: dr.project_ID,
+        tenant_ID: dr.tenant_ID, status: 'PENDING', agentVersion: '0.1.0',
       });
 
-      setImmediate(async () => {
-        const engine       = getAgentEngine();
-        const orchestrator = getAgentOrchestrator();
-        try {
-          // Phase 6: run via AgentOrchestrator for full audit trail + schema validation
-          const agentRun = await (orchestrator as {
-            run(input: unknown, context: unknown): Promise<{
-              status           : string;
-              error?           : string;
-              result?          : { verdict: string; rationale: string; confidence: number; recommendations: AssessmentRecommendation[]; evidenceReferences: unknown[] };
-              modelProvider    : string;
-              modelName        : string;
-              promptTokens     : number;
-              completionTokens : number;
-              latencyMs        : number;
-              retryCount       : number;
-              evidenceCount    : number;
-              schemaVersion    : string;
-              validationPassed : boolean;
-              startedAt        : string;
-              completedAt?     : string;
-              evidenceReferences: unknown[];
-            }>;
-          }).run(
-            {
-              designRequestId,
-              projectId       : dr.project_ID,
-              tenantId        : dr.tenant_ID,
-              title           : dr.title,
-              description     : dr.description,
-              businessProcess : dr.businessProcess,
-              module          : dr.module,
-              edition         : project.edition,
-              release         : project.release,
-            },
-            {
-              tenantId        : dr.tenant_ID,
-              projectId       : dr.project_ID,
-              deploymentModel : project.edition,
-              release         : project.release,
-            },
-          );
+      await update('nguard.DesignRequests').set({ status: 'ASSESSING' }).where({ ID: designRequestId });
+      await createAuditLog(req, { entityType: 'DesignRequest', entityId: designRequestId, action: 'SUBMIT', details: JSON.stringify({ assessmentId: assessment?.ID }) });
 
-          // Persist AgentRun record
+      setImmediate(async () => {
+        const fitEngine = getFitAssessmentEngine();
+        const engine    = getAgentEngine();
+        const assessInput = {
+          designRequestId, projectId: dr.project_ID, tenantId: dr.tenant_ID,
+          title: dr.title, description: dr.description, businessProcess: dr.businessProcess,
+          module: dr.module, edition: project.edition, release: project.release,
+        };
+        const assessContext = {
+          tenantId: dr.tenant_ID, projectId: dr.project_ID,
+          deploymentModel: project.edition, release: project.release,
+        };
+
+        try {
+          // Phase 7: FitAssessmentEngine → F1-F8 structured result
+          const { result: fitResult, run: fitRun } = await fitEngine.assess(assessInput, assessContext);
+
           await INSERT.into('nguard.AgentRuns').entries({
-            designRequest_ID : designRequestId,
-            project_ID       : dr.project_ID,
-            tenant_ID        : dr.tenant_ID,
-            assessment_ID    : assessment?.ID,
-            status           : agentRun.status,
-            modelProvider    : agentRun.modelProvider,
-            modelName        : agentRun.modelName,
-            promptTokens     : agentRun.promptTokens,
-            completionTokens : agentRun.completionTokens,
-            latencyMs        : agentRun.latencyMs,
-            retryCount       : agentRun.retryCount,
-            error            : agentRun.error ?? null,
-            evidenceCount    : agentRun.evidenceCount,
-            schemaVersion    : agentRun.schemaVersion,
-            validationPassed : agentRun.validationPassed,
-            startedAt        : agentRun.startedAt,
-            completedAt      : agentRun.completedAt ?? null,
+            designRequest_ID: designRequestId, project_ID: dr.project_ID,
+            tenant_ID: dr.tenant_ID, assessment_ID: assessment?.ID,
+            status: fitRun.status, modelProvider: fitRun.modelProvider, modelName: fitRun.modelName,
+            promptTokens: fitRun.promptTokens, completionTokens: fitRun.completionTokens,
+            latencyMs: fitRun.latencyMs, retryCount: fitRun.retryCount,
+            error: fitRun.error ?? null, evidenceCount: fitRun.evidenceCount,
+            schemaVersion: fitRun.schemaVersion, validationPassed: fitRun.validationPassed,
+            startedAt: fitRun.startedAt, completedAt: fitRun.completedAt ?? null,
           });
 
-          const result = agentRun.result;
-          const verdict     = result?.verdict    ?? 'NEEDS_REVIEW';
-          const rationale   = result?.rationale  ?? 'Agent run did not produce a result.';
-          const confidence  = result?.confidence ?? 0;
-          const recs        = result?.recommendations ?? [];
+          const FC_TO_VERDICT: Record<string, string> = {
+            F1:'FIT_TO_STANDARD', F2:'FIT_TO_STANDARD', F3:'ACCEPTABLE_GAP',
+            F4:'ACCEPTABLE_GAP', F5:'ACCEPTABLE_GAP', F6:'CUSTOMIZATION_RISK',
+            F7:'ACCEPTABLE_GAP', F8:'NEEDS_REVIEW',
+          };
+          const verdict    = FC_TO_VERDICT[fitResult.fitClassification] ?? 'NEEDS_REVIEW';
+          const recs       = (fitResult.recommendations ?? []) as Array<{type:string;description:string;effort:string;priority:string;rationale:string}>;
+          const confidence = fitResult.confidence;
 
-          await update('nguard.ComplianceAssessments')
-            .set({
-              status          : agentRun.status === 'COMPLETED' ? 'COMPLETED' : 'FAILED',
-              verdict,
-              rationale,
-              evidenceSources : JSON.stringify(agentRun.evidenceReferences ?? []),
-              confidence,
-              processedAt     : new Date().toISOString(),
-            })
-            .where({ ID: assessment?.ID });
+          await update('nguard.ComplianceAssessments').set({
+            status: fitRun.status === 'COMPLETED' ? 'COMPLETED' : 'FAILED',
+            verdict, rationale: `[${fitResult.fitClassification}] ${fitResult.businessIntentSummary}`,
+            evidenceSources: JSON.stringify(fitResult.evidenceReferences ?? []),
+            confidence, processedAt: new Date().toISOString(),
+            fitClassification: fitResult.fitClassification,
+            deploymentCompatibility: fitResult.deploymentCompatibility,
+            evidenceConfidence: fitResult.evidenceConfidence,
+            businessIntentSummary: fitResult.businessIntentSummary,
+            processClassification: fitResult.processClassification,
+            targetDeploymentContext: fitResult.targetDeploymentContext,
+            standardCapability: fitResult.standardCapability ?? null,
+            gapDescription: fitResult.gapDescription ?? null,
+            configurationOpportunity: fitResult.configurationOpportunity ?? null,
+            customizationRiskStatement: fitResult.customizationRiskStatement ?? null,
+            recommendedNextAction: fitResult.recommendedNextAction,
+            assumptions: JSON.stringify(fitResult.assumptions ?? []),
+            unknowns: JSON.stringify(fitResult.unknowns ?? []),
+            humanReviewRequired: fitResult.humanReviewRequired,
+            agentSchemaVersion: fitResult.schemaVersion,
+          }).where({ ID: assessment?.ID });
 
           if (recs.length) {
             await INSERT.into('nguard.Recommendations').entries(
-              recs.map((r: AssessmentRecommendation, i: number) => ({
-                assessment_ID : assessment?.ID,
-                sequence      : i + 1,
-                type          : r.type,
-                description   : r.description,
-                effort        : r.effort,
-                priority      : r.priority,
-                rationale     : r.rationale,
+              recs.map((r, i) => ({
+                assessment_ID: assessment?.ID, sequence: i + 1,
+                type: r.type, description: r.description,
+                effort: r.effort, priority: r.priority, rationale: r.rationale,
               }))
             );
           }
 
           await update('nguard.DesignRequests')
-            .set({ status: agentRun.status === 'COMPLETED' ? 'ASSESSED' : 'SUBMITTED' })
+            .set({ status: fitRun.status === 'COMPLETED' ? 'ASSESSED' : 'SUBMITTED' })
             .where({ ID: designRequestId });
 
           await createAuditLog(req, {
-            entityType : 'ComplianceAssessment',
-            entityId   : assessment?.ID,
-            action     : 'ASSESS',
-            details    : JSON.stringify({ verdict, confidence, agentStatus: agentRun.status }),
+            entityType: 'ComplianceAssessment', entityId: assessment?.ID, action: 'ASSESS',
+            details: JSON.stringify({ fitClassification: fitResult.fitClassification, confidence, agentStatus: fitRun.status }),
           });
 
         } catch (err: unknown) {
-          // Fallback to direct engine if orchestrator fails (backward compat)
-          const message = err instanceof Error ? err.message : String(err);
-          const log = cds.log('assess');
-          log.warn(`AgentOrchestrator failed, falling back to AgentEngine: ${message}`);
+          // Fallback: legacy AgentEngine
+          const msg = err instanceof Error ? err.message : String(err);
+          cds.log('assess').warn(`FitAssessmentEngine failed, falling back to AgentEngine: ${msg}`);
           try {
             const result = await engine.assess({
-              designRequestId,
-              projectId       : dr.project_ID,
-              tenantId        : dr.tenant_ID,
-              title           : dr.title,
-              description     : dr.description,
-              businessProcess : dr.businessProcess,
-              module          : dr.module,
-              edition         : project.edition,
-              release         : project.release,
+              designRequestId, projectId: dr.project_ID, tenantId: dr.tenant_ID,
+              title: dr.title, description: dr.description, businessProcess: dr.businessProcess,
+              module: dr.module, edition: project.edition, release: project.release,
             });
-            await update('nguard.ComplianceAssessments')
-              .set({ status: 'COMPLETED', verdict: result.verdict, rationale: result.rationale,
-                     evidenceSources: JSON.stringify(result.evidenceSources),
-                     confidence: result.confidence, processedAt: new Date().toISOString() })
-              .where({ ID: assessment?.ID });
+            await update('nguard.ComplianceAssessments').set({
+              status: 'COMPLETED', verdict: result.verdict, rationale: result.rationale,
+              evidenceSources: JSON.stringify(result.evidenceSources),
+              confidence: result.confidence, processedAt: new Date().toISOString(),
+              fitClassification: 'F8', agentSchemaVersion: '1.0',
+            }).where({ ID: assessment?.ID });
             await update('nguard.DesignRequests').set({ status: 'ASSESSED' }).where({ ID: designRequestId });
           } catch (err2: unknown) {
             const msg2 = err2 instanceof Error ? err2.message : String(err2);
-            await update('nguard.ComplianceAssessments')
-              .set({ status: 'FAILED', rationale: `Agent error: ${msg2}` })
-              .where({ ID: assessment?.ID });
+            await update('nguard.ComplianceAssessments').set({ status: 'FAILED', rationale: `Agent error: ${msg2}`, fitClassification: 'F8' }).where({ ID: assessment?.ID });
             await update('nguard.DesignRequests').set({ status: 'SUBMITTED' }).where({ ID: designRequestId });
           }
         }
@@ -436,74 +241,35 @@ export default class NGuardServiceHandler extends cds.ApplicationService {
       return assessment;
     });
 
-    // ── approveAssessment ────────────────────────────────────────────────────
+    // ── approveAssessment ─────────────────────────────────────────────────────
     this.on('approveAssessment', async (req: cds.Request) => {
       const { assessmentId, notes } = req.data as { assessmentId: string; notes?: string };
-
-      const assessment = await SELECT.one
-        .from('nguard.ComplianceAssessments')
-        .where({ ID: assessmentId });
-
+      const assessment = await SELECT.one.from('nguard.ComplianceAssessments').where({ ID: assessmentId });
       if (!assessment) return req.error(404, `Assessment ${assessmentId} not found`);
-      if (assessment.status !== 'COMPLETED') {
-        return req.error(409, `Cannot approve assessment in status ${assessment.status}`);
-      }
-
-      await update('nguard.DesignRequests')
-        .set({ status: 'APPROVED' })
-        .where({ ID: assessment.designRequest_ID });
-
-      await createAuditLog(req, {
-        entityType : 'ComplianceAssessment',
-        entityId   : assessmentId,
-        action     : 'APPROVE',
-        details    : JSON.stringify({ notes }),
-      });
-
+      if (assessment.status !== 'COMPLETED') return req.error(409, `Cannot approve assessment in status ${assessment.status}`);
+      await update('nguard.DesignRequests').set({ status: 'APPROVED' }).where({ ID: assessment.designRequest_ID });
+      await createAuditLog(req, { entityType: 'ComplianceAssessment', entityId: assessmentId, action: 'APPROVE', details: JSON.stringify({ notes }) });
       return true;
     });
 
-    // ── rejectAssessment ─────────────────────────────────────────────────────
+    // ── rejectAssessment ──────────────────────────────────────────────────────
     this.on('rejectAssessment', async (req: cds.Request) => {
       const { assessmentId, reason } = req.data as { assessmentId: string; reason?: string };
-
-      const assessment = await SELECT.one
-        .from('nguard.ComplianceAssessments')
-        .where({ ID: assessmentId });
-
+      const assessment = await SELECT.one.from('nguard.ComplianceAssessments').where({ ID: assessmentId });
       if (!assessment) return req.error(404, `Assessment ${assessmentId} not found`);
-
-      await update('nguard.DesignRequests')
-        .set({ status: 'REJECTED' })
-        .where({ ID: assessment.designRequest_ID });
-
-      await createAuditLog(req, {
-        entityType : 'ComplianceAssessment',
-        entityId   : assessmentId,
-        action     : 'REJECT',
-        details    : JSON.stringify({ reason }),
-      });
-
+      await update('nguard.DesignRequests').set({ status: 'REJECTED' }).where({ ID: assessment.designRequest_ID });
+      await createAuditLog(req, { entityType: 'ComplianceAssessment', entityId: assessmentId, action: 'REJECT', details: JSON.stringify({ reason }) });
       return true;
     });
 
-    // ── Phase 4: Knowledge Ingestion actions ─────────────────────────────────
+    // ── Phase 4: Knowledge Ingestion actions ──────────────────────────────────
     this.on('createKnowledgeSource', async (req: cds.Request) => {
-      const d = req.data as {
-        name?: string; description?: string; sourceType?: string;
-        authorityLevel?: string; baseUrl?: string; projectId?: string;
-      };
+      const d = req.data as { name?: string; description?: string; sourceType?: string; authorityLevel?: string; baseUrl?: string; projectId?: string };
       return handleCreateKnowledgeSource(req, d);
     });
 
     this.on('ingestDocument', async (req: cds.Request) => {
-      const d = req.data as {
-        knowledgeSourceId?: string; fileName?: string; mimeType?: string;
-        contentBase64?: string; title?: string; edition?: string;
-        release?: string; country?: string; industry?: string;
-        processArea?: string; scopeItem?: string; authorityLevel?: string;
-        docType?: string; language?: string;
-      };
+      const d = req.data as { knowledgeSourceId?: string; fileName?: string; mimeType?: string; contentBase64?: string; title?: string; edition?: string; release?: string; country?: string; industry?: string; processArea?: string; scopeItem?: string; authorityLevel?: string; docType?: string; language?: string };
       return handleIngestDocument(req, d);
     });
 
@@ -517,23 +283,25 @@ export default class NGuardServiceHandler extends cds.ApplicationService {
       return handleDeleteKnowledgeDocument(req, documentId);
     });
 
-    // ── Phase 3: Requirements Workspace validation hooks ─────────────────────
+    // ── Phase 3: Requirements Workspace ───────────────────────────────────────
     registerWorkspaceValidation(this);
 
-    // ── importRequirements ───────────────────────────────────────────────────
     this.on('importRequirements', async (req: cds.Request) => {
       const { projectId, csv } = req.data as { projectId: string; csv: string };
-      const result = await handleImportRequirements(req, projectId, csv);
-      return result;
+      return handleImportRequirements(req, projectId, csv);
     });
 
-    // ── exportRequirements ───────────────────────────────────────────────────
     this.on('exportRequirements', async (req: cds.Request) => {
       const { projectId, workItemType } = req.data as { projectId: string; workItemType?: string };
-      const csv = await handleExportRequirements(req, projectId, workItemType);
-      return csv;
+      return handleExportRequirements(req, projectId, workItemType);
     });
 
     await super.init();
   }
 }
+
+// Suppress unused import warning — engine is used in fallback
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _AssessmentRecommendationUsed = AssessmentRecommendation;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _orchestratorRef = getAgentOrchestrator;

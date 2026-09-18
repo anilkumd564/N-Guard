@@ -72,6 +72,11 @@ service NGuardService {
   @readonly
   entity EvidenceReferences as projection on nguard.EvidenceReferences;
 
+  // ── Phase 12: Async Job Queue ────────────────────────────────────────────
+  /** AsyncJobs — durable background job queue (replaceable implementation). */
+  @readonly
+  entity AsyncJobs as projection on nguard.AsyncJobs;
+
   // ── Phase 10: Human Review Workflow ──────────────────────────────────────
   /** DesignDecisions — Design Decision / Exception Register (rule 5: AI never final approver). */
   @readonly
@@ -204,6 +209,32 @@ service NGuardService {
    * Get aggregated dashboard statistics for a project.
    * Every metric is derived from stored records — no fabricated KPIs.
    */
+  /**
+   * Submit a background job for asynchronous processing.
+   * No long-running work executes inside a browser HTTP request.
+   * No credentials may be included in the payload.
+   */
+  action submitJob(
+    projectId    : UUID,
+    jobType      : String,
+    payload      : LargeString,
+    submittedBy  : String,
+    maxRetries   : Integer
+  ) returns AsyncJobs;
+
+  /** Cancel a QUEUED job. Returns true if cancellation succeeded. */
+  action cancelJob(jobId : UUID) returns Boolean;
+
+  /** Retry a FAILED job. Returns true if retry was accepted. */
+  action retryJob(jobId : UUID) returns Boolean;
+
+  /**
+   * Check the health of all configured integration targets.
+   * Returns NOT_CONFIGURED for any target without environment credentials.
+   * Never fabricates CONNECTED status.
+   */
+  action getIntegrationHealth() returns LargeString;
+
   action getDashboardStats(projectId : UUID)
     returns {
       totalRequirements     : Integer;

@@ -444,6 +444,88 @@ export default class NGuardServiceHandler extends cds.ApplicationService {
       return cmp;
     });
 
+    // ── submitJob (Phase 12) ──────────────────────────────────────────────────
+    this.on('submitJob', async (req: cds.Request) => {
+      const { projectId, jobType, payload, submittedBy, maxRetries } = req.data as {
+        projectId: string; jobType: string; payload: string; submittedBy?: string; maxRetries?: number;
+      };
+      if (!projectId || !jobType) return req.error(400, 'projectId and jobType are required');
+
+      const project = await SELECT.one.from('nguard.Projects').where({ ID: projectId }).columns('ID','tenant_ID');
+      if (!project) return req.error(404, `Project ${projectId} not found`);
+
+      let parsedPayload: Record<string, unknown> = {};
+      try { if (payload) parsedPayload = JSON.parse(payload) as Record<string, unknown>; }
+      catch { return req.error(400, 'payload must be valid JSON'); }
+
+      const [job] = await INSERT.into('nguard.AsyncJobs').entries({
+        project_ID     : projectId,
+        tenant_ID      : project.tenant_ID,
+        jobType,
+        status         : 'QUEUED',
+        payload        : JSON.stringify(parsedPayload),
+        progress       : 0,
+        itemsProcessed : 0,
+        itemsTotal     : 0,
+        retryCount     : 0,
+        maxRetries     : maxRetries ?? 2,
+        submittedBy    : submittedBy ?? null,
+      });
+
+      await createAuditLog(req, {
+        entityType : 'AsyncJob',
+        entityId   : job?.ID,
+        action     : 'SUBMIT',
+        details    : JSON.stringify({ jobType, projectId }),
+      });
+
+      return job;
+    });
+
+    // ── cancelJob (Phase 12) ──────────────────────────────────────────────────
+    this.on('cancelJob', async (req: cds.Request) => {
+      const { jobId } = req.data as { jobId: string };
+      if (!jobId) return req.error(400, 'jobId is required');
+      const job = await SELECT.one.from('nguard.AsyncJobs').where({ ID: jobId }).columns('ID','status');
+      if (!job) return req.error(404, `Job ${jobId} not found`);
+      if (job.status !== 'QUEUED') return req.error(409, `Cannot cancel job in status ${job.status}`);
+      await update('nguard.AsyncJobs').set({ status: 'CANCELLED' }).where({ ID: jobId });
+      return true;
+    });
+
+    // ── retryJob (Phase 12) ───────────────────────────────────────────────────
+    this.on('retryJob', async (req: cds.Request) => {
+      const { jobId } = req.data as { jobId: string };
+      if (!jobId) return req.error(400, 'jobId is required');
+      const job = await SELECT.one.from('nguard.AsyncJobs').where({ ID: jobId }).columns('ID','status');
+      if (!job) return req.error(404, `Job ${jobId} not found`);
+      if (job.status !== 'FAILED') return req.error(409, `Cannot retry job in status ${job.status}`);
+      await update('nguard.AsyncJobs').set({ status: 'QUEUED', errorMessage: null }).where({ ID: jobId });
+      return true;
+    });
+
+    // ── getIntegrationHealth (Phase 12) ───────────────────────────────────────
+    this.on('getIntegrationHealth', (_req: cds.Request) => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { checkIntegrationHealth: checkHealth } = require('@n-guard/agent') as {
+        checkIntegrationHealth: (target: string, env: Record<string, string | undefined>) => { status: string; message: string };
+      };
+      const targets = ['SHAREPOINT', 'AZURE_DEVOPS', 'SAP_CLOUD_ALM', 'SAP_S4HANA', 'SIGNAVIO', 'JIRA'];
+      const labels: Record<string, string> = {
+        SHAREPOINT    : 'Microsoft SharePoint',
+        AZURE_DEVOPS  : 'Azure DevOps',
+        SAP_CLOUD_ALM : 'SAP Cloud ALM',
+        SAP_S4HANA    : 'SAP S/4HANA API',
+        SIGNAVIO      : 'SAP Signavio',
+        JIRA          : 'Atlassian Jira',
+      };
+      const results = targets.map(t => {
+        const { status, message } = checkHealth(t, process.env as Record<string, string | undefined>);
+        return { target: t, label: labels[t] ?? t, status, message, checkedAt: new Date().toISOString() };
+      });
+      return JSON.stringify(results);
+    });
+
     // ── getDashboardStats (Phase 11) ─────────────────────────────────────────
     this.on('getDashboardStats', async (req: cds.Request) => {
       const { projectId } = req.data as { projectId: string };

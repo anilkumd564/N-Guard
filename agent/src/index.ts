@@ -62,6 +62,24 @@ export type {
   HttpMethod,
 } from './providers/IntegrationProvider.js';
 
+// Phase 12: Async Job Queue and Integration Health
+export { AsyncJobQueue, checkIntegrationHealth } from './jobs/AsyncJobQueue.js';
+export type { JobHandler, QueueOptions } from './jobs/AsyncJobQueue.js';
+export type {
+  JobType,
+  JobStatus,
+  AsyncJob,
+  SubmitJobInput,
+  JobResult,
+  IntegrationHealthStatus,
+  IntegrationHealth,
+} from './jobs/types.js';
+export {
+  JOB_TYPE_LABELS,
+  JOB_STATUS_COLORS,
+  INTEGRATION_STATUS_COLORS,
+} from './jobs/types.js';
+
 // Phase 10: Human Review Workflow
 export type {
   ReviewStatus,

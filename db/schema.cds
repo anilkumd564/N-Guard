@@ -501,6 +501,30 @@ entity DesignDecisions : cuid, managed {
   isAIFinalApprover  : Boolean default false;  // always false — audit checkpoint
 }
 
+// ─── Phase 12: Async Job Queue Persistence ────────────────────────────────────
+
+/**
+ * AsyncJobs stores all background job records.
+ * Provides durability — jobs survive server restarts.
+ * The queue processes records from this table.
+ */
+entity AsyncJobs : cuid, managed {
+  project        : Association to Projects not null;
+  tenant         : Association to Tenants  not null;
+  jobType        : String(40)  not null;  // JobType enum
+  status         : String(20)  not null;  // JobStatus enum
+  payload        : LargeString;           // JSON: job input (no credentials)
+  progress       : Integer default 0;     // 0–100
+  itemsProcessed : Integer default 0;
+  itemsTotal     : Integer default 0;
+  errorMessage   : String(2000);
+  retryCount     : Integer default 0;
+  maxRetries     : Integer default 2;
+  submittedBy    : String(200);
+  startedAt      : Timestamp;
+  completedAt    : Timestamp;
+}
+
 /**
  * AuditLogs — immutable event log.
  */

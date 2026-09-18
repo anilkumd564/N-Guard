@@ -624,6 +624,58 @@ export interface DashboardStats {
   decisionsByAction      : string;   // JSON: Record<string,number>
 }
 
+// ─── Phase 12: Async Job Queue types ─────────────────────────────────────────
+
+export type JobType   = 'DOCUMENT_INGESTION' | 'BULK_REQUIREMENT_IMPORT' | 'BATCH_ASSESSMENT' | 'KNOWLEDGE_REINDEX' | 'INTEGRATION_SYNC';
+export type JobStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'RETRYING';
+export type IntegrationHealthStatus = 'CONNECTED' | 'UNREACHABLE' | 'AUTHENTICATION_ERROR' | 'NOT_CONFIGURED' | 'CHECKING';
+
+export const JOB_STATUS_COLORS: Record<JobStatus, string> = {
+  QUEUED:'#94a3b8', RUNNING:'#60a5fa', COMPLETED:'#22c55e',
+  FAILED:'#ef4444', CANCELLED:'#475569', RETRYING:'#facc15',
+};
+
+export const INTEGRATION_STATUS_COLORS: Record<IntegrationHealthStatus, string> = {
+  CONNECTED:'#22c55e', UNREACHABLE:'#ef4444', AUTHENTICATION_ERROR:'#f97316',
+  NOT_CONFIGURED:'#94a3b8', CHECKING:'#60a5fa',
+};
+
+export const JOB_TYPE_LABELS: Record<JobType, string> = {
+  DOCUMENT_INGESTION      : 'Document Ingestion',
+  BULK_REQUIREMENT_IMPORT : 'Bulk Requirement Import',
+  BATCH_ASSESSMENT        : 'Batch Assessment',
+  KNOWLEDGE_REINDEX       : 'Knowledge Re-index',
+  INTEGRATION_SYNC        : 'Integration Sync',
+};
+
+export interface AsyncJob {
+  ID?            : string;
+  project_ID     : string;
+  tenant_ID      : string;
+  jobType        : JobType;
+  status         : JobStatus;
+  payload?       : string;  // JSON
+  progress?      : number;
+  itemsProcessed?: number;
+  itemsTotal?    : number;
+  errorMessage?  : string;
+  retryCount?    : number;
+  maxRetries?    : number;
+  submittedBy?   : string;
+  startedAt?     : string;
+  completedAt?   : string;
+  createdAt?     : string;
+  modifiedAt?    : string;
+}
+
+export interface IntegrationHealth {
+  target      : string;
+  label       : string;
+  status      : IntegrationHealthStatus;
+  message?    : string;
+  checkedAt?  : string;
+}
+
 // ─── API response wrappers ────────────────────────────────────────────────────
 
 export interface ODataListResponse<T> {

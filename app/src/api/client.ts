@@ -487,6 +487,62 @@ export async function exportDecisionsCSV(projectId: string): Promise<string> {
   return result.value;
 }
 
+// ─── Async Jobs (Phase 12) ────────────────────────────────────────────────────
+
+export async function listAsyncJobs(
+  projectId?: string,
+): Promise<import('../types/api.js').AsyncJob[]> {
+  const filter = projectId
+    ? `?$filter=project_ID eq ${projectId}&$orderby=createdAt desc`
+    : '?$orderby=createdAt desc';
+  const data = await request<import('../types/api.js').ODataListResponse<import('../types/api.js').AsyncJob>>(
+    `/AsyncJobs${filter}`,
+  );
+  return data.value;
+}
+
+export async function submitJob(payload: {
+  projectId    : string;
+  jobType      : string;
+  jobPayload   : Record<string, unknown>;
+  submittedBy? : string;
+  maxRetries?  : number;
+}): Promise<import('../types/api.js').AsyncJob> {
+  const result = await request<{ value: import('../types/api.js').AsyncJob }>('/submitJob', {
+    method: 'POST',
+    body: JSON.stringify({
+      projectId  : payload.projectId,
+      jobType    : payload.jobType,
+      payload    : JSON.stringify(payload.jobPayload),
+      submittedBy: payload.submittedBy,
+      maxRetries : payload.maxRetries,
+    }),
+  });
+  return result.value;
+}
+
+export async function cancelJob(jobId: string): Promise<boolean> {
+  const result = await request<{ value: boolean }>('/cancelJob', {
+    method: 'POST', body: JSON.stringify({ jobId }),
+  });
+  return result.value;
+}
+
+export async function retryJob(jobId: string): Promise<boolean> {
+  const result = await request<{ value: boolean }>('/retryJob', {
+    method: 'POST', body: JSON.stringify({ jobId }),
+  });
+  return result.value;
+}
+
+export async function getIntegrationHealth(): Promise<import('../types/api.js').IntegrationHealth[]> {
+  const result = await request<{ value: string }>('/getIntegrationHealth', {
+    method: 'POST', body: JSON.stringify({}),
+  });
+  try { return JSON.parse(result.value) as import('../types/api.js').IntegrationHealth[]; }
+  catch { return []; }
+}
+
 export async function listAssessments(
   designRequestId?: string,
 ): Promise<ComplianceAssessment[]> {

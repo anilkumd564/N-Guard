@@ -28,7 +28,7 @@ function makeInfoResponse(): { name: string; version: string; environment: strin
     name        : 'n-guard',
     version     : process.env.npm_package_version ?? '0.1.0',
     environment : process.env.NODE_ENV ?? 'development',
-      phase       : '14 — BTP Deployment Preparation',
+      phase       : '15 — End-to-End Validation and Release Candidate',
   };
 }
 
@@ -56,8 +56,8 @@ describe('AppService — info response', () => {
     expect(makeInfoResponse().version.length).toBeGreaterThan(0);
   });
 
-  it('phase label references Phase 14', () => {
-    expect(makeInfoResponse().phase).toContain('14');
+  it('phase label references Phase 15', () => {
+    expect(makeInfoResponse().phase).toContain('15');
   });
 });
 

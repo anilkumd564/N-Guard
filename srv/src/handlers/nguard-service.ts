@@ -137,8 +137,8 @@ export default class NGuardServiceHandler extends cds.ApplicationService {
       await createAuditLog(req, { entityType: 'DesignRequest', entityId: designRequestId, action: 'SUBMIT', details: JSON.stringify({ assessmentId: assessment?.ID }) });
 
       setImmediate(async () => {
-        const fitEngine = getFitAssessmentEngine();
-        const engine    = getAgentEngine();
+        const fitEngine = await getFitAssessmentEngine();
+        const engine    = await getAgentEngine();
         const assessInput = {
           designRequestId, projectId: dr.project_ID, tenantId: dr.tenant_ID,
           title: dr.title, description: dr.description, businessProcess: dr.businessProcess,
@@ -316,7 +316,7 @@ export default class NGuardServiceHandler extends cds.ApplicationService {
         .orderBy('createdAt desc')
         .columns('ID','fitClassification','businessIntentSummary','gapDescription','configurationOpportunity');
 
-      const ccAnalyzer = getCleanCoreAnalyzer();
+      const ccAnalyzer = await getCleanCoreAnalyzer();
       const analysisResult = ccAnalyzer.analyze({
         designRequestId,
         projectId         : dr.project_ID,
@@ -383,7 +383,7 @@ export default class NGuardServiceHandler extends cds.ApplicationService {
         .columns('ID','edition','release','tenant_ID');
       if (!project) return req.error(404, `Project ${dr.project_ID} not found`);
 
-      const compEngine = getCrossEditionComparisonEngine();
+      const compEngine = await getCrossEditionComparisonEngine();
 
       const cmpResult = await compEngine.compare(
         {
@@ -505,11 +505,10 @@ export default class NGuardServiceHandler extends cds.ApplicationService {
     });
 
     // ── getIntegrationHealth (Phase 12) ───────────────────────────────────────
-    this.on('getIntegrationHealth', (_req: cds.Request) => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { checkIntegrationHealth: checkHealth } = require('@n-guard/agent') as {
-        checkIntegrationHealth: (target: string, env: Record<string, string | undefined>) => { status: string; message: string };
-      };
+    this.on('getIntegrationHealth', async (_req: cds.Request) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const m = await (Function('return import("@n-guard/agent")')() as Promise<any>);
+      const checkHealth = m.checkIntegrationHealth as (t: string, env: Record<string, string | undefined>) => { status: string; message: string };
       const targets = ['SHAREPOINT', 'AZURE_DEVOPS', 'SAP_CLOUD_ALM', 'SAP_S4HANA', 'SIGNAVIO', 'JIRA'];
       const labels: Record<string, string> = {
         SHAREPOINT    : 'Microsoft SharePoint',

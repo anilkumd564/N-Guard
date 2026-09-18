@@ -38,7 +38,7 @@ export default class AdminServiceHandler extends cds.ApplicationService {
       if (!doc.content) return req.error(422, 'Document has no content to embed');
 
       try {
-        const engine = getAgentEngine();
+        const engine = await getAgentEngine();
         await engine.embedDocument({
           id      : doc.ID,
           content : doc.content,
@@ -105,7 +105,7 @@ export default class AdminServiceHandler extends cds.ApplicationService {
 
       if (!chunks?.length) return 0;
 
-      const engine = getAgentEngine();
+      const engine = await getAgentEngine();
       let indexed  = 0;
 
       for (const chunk of chunks) {

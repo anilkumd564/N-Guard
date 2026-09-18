@@ -1,272 +1,87 @@
 /**
  * N-Guard — Agent Engine Factory
  *
- * Provides a singleton AgentEngine instance to CAP service handlers.
- *
- * Architecture rules:
- *  - Rule 6:  This factory is the ONLY coupling point between the CAP layer
- *             and the Agent Engine.  Handlers never import engine internals.
- *  - Rule 7:  AIProvider is resolved and injected here.
- *  - Rule 8:  VectorStore is resolved and injected here.
- *  - Rule 11: Configuration comes from environment variables; no hard-coded creds.
- *
- * The factory uses local port interfaces (srv/src/types/agent.ts) so that
- * the srv package has ZERO compile-time dependency on agent package internals.
- * The agent implementations are loaded at runtime via require().
+ * Uses dynamic import() to bridge the CJS (srv) → ESM (@n-guard/agent) boundary.
+ * Node.js 18+ supports await import() from CJS modules.
  */
 
 import type { AgentEngine } from '../types/agent.js';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _mod: any = null;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function mod(): Promise<any> {
+  if (!_mod) {
+    // Dynamic import bridges CJS srv → ESM agent package
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    _mod = await (Function('return import("@n-guard/agent")')() as Promise<any>);
+  }
+  return _mod;
+}
+
+// ─── Provider helpers ─────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function resolveAIProvider(): Promise<any> {
+  const name = process.env.AI_PROVIDER ?? 'mock';
+  if (name === 'mock') { const m = await mod(); return new m.MockAIProvider(); }
+  throw new Error(`Unknown AI_PROVIDER="${name}". Supported: mock | aicore`);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function resolveVectorStore(): Promise<any> {
+  const name = process.env.VECTOR_STORE ?? 'mock';
+  if (name === 'mock') { const m = await mod(); return new m.MockVectorStore(); }
+  throw new Error(`Unknown VECTOR_STORE="${name}". Supported: mock | hana`);
+}
+
+// ─── Exported factories ───────────────────────────────────────────────────────
+
+export async function getFitAssessmentEngine() {
+  const m = await mod();
+  const ai = await resolveAIProvider();
+  const vs = await resolveVectorStore();
+  const search = new m.KnowledgeSearchService({ store: vs, aiProvider: ai });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return new m.FitAssessmentEngine({ aiProvider: ai, knowledgeSearchService: search }) as any;
+}
+
+export async function getCrossEditionComparisonEngine() {
+  const m = await mod();
+  const ai = await resolveAIProvider();
+  const vs = await resolveVectorStore();
+  const search = new m.KnowledgeSearchService({ store: vs, aiProvider: ai });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return new m.CrossEditionComparisonEngine({ aiProvider: ai, knowledgeSearchService: search }) as any;
+}
+
+export async function getCleanCoreAnalyzer() {
+  const m = await mod();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return new m.CleanCoreAnalyzer() as any;
+}
+
+export async function getAgentOrchestrator() {
+  const m = await mod();
+  const ai = await resolveAIProvider();
+  const vs = await resolveVectorStore();
+  const search = new m.KnowledgeSearchService({ store: vs, aiProvider: ai });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return new m.AgentOrchestrator({ aiProvider: ai, knowledgeSearchService: search }) as any;
+}
+
 let _engine: AgentEngine | null = null;
 
-// ─── Orchestrator factory ─────────────────────────────────────────────────────
-
-/**
- * Lazily build the AgentOrchestrator for Phase 6 assessment pipeline.
- * Returns the orchestrator object from the agent package at runtime.
- */
-export function getAgentOrchestrator() {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { AgentOrchestrator, KnowledgeSearchService } = require('@n-guard/agent') as {
-    AgentOrchestrator    : new (deps: {
-      aiProvider            : unknown;
-      knowledgeSearchService: unknown;
-      options?              : Record<string, unknown>;
-    }) => { run(input: unknown, context: unknown): Promise<unknown> };
-    KnowledgeSearchService: new (deps: { store: unknown; aiProvider: unknown }) => unknown;
-  };
-
-  const aiProvider = resolveAIProvider();
-  const store      = resolveVectorStore();
-  const search     = new KnowledgeSearchService({ store, aiProvider });
-
-  return new AgentOrchestrator({ aiProvider, knowledgeSearchService: search });
-}
-
-/**
- * Get the CleanCoreAnalyzer for Phase 9 Clean Core governance.
- */
-export function getCleanCoreAnalyzer() {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { CleanCoreAnalyzer } = require('@n-guard/agent') as {
-    CleanCoreAnalyzer: new (catalog?: unknown) => {
-      analyze(input: {
-        designRequestId       : string;
-        projectId             : string;
-        tenantId              : string;
-        edition               : string;
-        release?              : string;
-        cleanCorePolicy?      : string;
-        fitClassification?    : string;
-        proposedApproach      : string;
-        businessIntent?       : string;
-        gapDescription?       : string;
-        configurationOpportunity?: string;
-      }): {
-        analysisId                 : string;
-        schemaVersion              : string;
-        preferredTechnique         : string;
-        cleanCoreTier              : string;
-        riskLevel                  : string;
-        concerns                   : string[];
-        riskFactors                : string[];
-        requiredArchitectureReview : boolean;
-        requiresException          : boolean;
-        saferAlternative?          : string;
-        unknowns                   : string[];
-        appliedRules               : Array<{ catalogVersion: string }>;
-        techniqueApplicability     : unknown[];
-      };
-    };
-  };
-  return new CleanCoreAnalyzer();
-}
-
-/**
- * Get the CrossEditionComparisonEngine for Phase 8 cross-edition comparisons.
- */
-export function getCrossEditionComparisonEngine() {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { CrossEditionComparisonEngine, KnowledgeSearchService } = require('@n-guard/agent') as {
-    CrossEditionComparisonEngine: new (deps: {
-      aiProvider            : unknown;
-      knowledgeSearchService: unknown;
-      options?              : Record<string, unknown>;
-    }) => {
-      compare(
-        input      : unknown,
-        baseContext: unknown,
-        editions?  : readonly string[],
-      ): Promise<{
-        comparisonId        : string;
-        designRequestId     : string;
-        projectId           : string;
-        tenantId            : string;
-        businessIntent      : string;
-        processArea         : string;
-        editionResults      : Array<{
-          edition                : string;
-          fitClassification      : string;
-          deploymentCompatibility: string;
-          evidenceConfidence     : string;
-          confidence             : number;
-          standardCapability?    : string;
-          gapDescription?        : string;
-          configurationApproach? : string;
-          processIdentifiers     : string[];
-          evidenceReferences     : unknown[];
-          humanReviewRequired    : boolean;
-          agentRunId             : string;
-          schemaVersion          : string;
-          validationPassed       : boolean;
-        }>;
-        summary: {
-          commonCapabilities       : string[];
-          editionSpecificNotes     : string[];
-          recommendedNextAction    : string;
-          overallHumanReviewNeeded : boolean;
-          editionsWithInsufficient : string[];
-        };
-        evidencePartitioned : boolean;
-        completedAt         : string;
-        schemaVersion       : string;
-      }>;
-    };
-    KnowledgeSearchService: new (deps: { store: unknown; aiProvider: unknown }) => unknown;
-  };
-
-  const aiProvider = resolveAIProvider();
-  const store      = resolveVectorStore();
-  const search     = new KnowledgeSearchService({ store, aiProvider });
-
-  return new CrossEditionComparisonEngine({ aiProvider, knowledgeSearchService: search });
-}
-
-/**
- * Get the FitAssessmentEngine for Phase 7 F1-F8 structured assessments.
- */
-export function getFitAssessmentEngine() {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { FitAssessmentEngine, KnowledgeSearchService } = require('@n-guard/agent') as {
-    FitAssessmentEngine  : new (deps: {
-      aiProvider            : unknown;
-      knowledgeSearchService: unknown;
-      options?              : Record<string, unknown>;
-    }) => {
-      assess(input: unknown, context: unknown): Promise<{
-        result: {
-          fitClassification          : string;
-          deploymentCompatibility    : string;
-          evidenceConfidence         : string;
-          confidence                 : number;
-          businessIntentSummary      : string;
-          processClassification      : string;
-          targetDeploymentContext    : string;
-          standardCapability?        : string;
-          gapDescription?            : string;
-          configurationOpportunity?  : string;
-          customizationRiskStatement?: string;
-          recommendedNextAction      : string;
-          recommendations            : unknown[];
-          evidenceReferences         : unknown[];
-          assumptions                : string[];
-          unknowns                   : string[];
-          humanReviewRequired        : boolean;
-          validationPassed           : boolean;
-          agentRunId                 : string;
-          schemaVersion              : string;
-        };
-        run: {
-          id              : string;
-          status          : string;
-          error?          : string;
-          modelProvider   : string;
-          modelName       : string;
-          promptTokens    : number;
-          completionTokens: number;
-          latencyMs       : number;
-          retryCount      : number;
-          evidenceCount   : number;
-          schemaVersion   : string;
-          validationPassed: boolean;
-          startedAt       : string;
-          completedAt?    : string;
-        };
-      }>;
-    };
-    KnowledgeSearchService: new (deps: { store: unknown; aiProvider: unknown }) => unknown;
-  };
-
-  const aiProvider = resolveAIProvider();
-  const store      = resolveVectorStore();
-  const search     = new KnowledgeSearchService({ store, aiProvider });
-
-  return new FitAssessmentEngine({ aiProvider, knowledgeSearchService: search });
-}
-
-/**
- * Returns the singleton AgentEngine.
- * Lazily initialised on first call with providers resolved from env vars.
- */
-export function getAgentEngine(): AgentEngine {
+export async function getAgentEngine(): Promise<AgentEngine> {
   if (_engine) return _engine;
-  _engine = buildEngine();
+  const m = await mod();
+  const ai = await resolveAIProvider();
+  const vs = await resolveVectorStore();
+  _engine = new m.NGuardAgentEngine({ aiProvider: ai, vectorStore: vs }) as AgentEngine;
   return _engine;
 }
 
-/** Reset the singleton — used in tests to inject a mock engine. */
 export function resetAgentEngine(engine?: AgentEngine): void {
   _engine = engine ?? null;
-}
-
-// ─── Private ──────────────────────────────────────────────────────────────────
-
-function buildEngine(): AgentEngine {
-  const aiProvider  = resolveAIProvider();
-  const vectorStore = resolveVectorStore();
-
-  // Runtime require keeps srv compilable before agent is built.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const engineModule = require('@n-guard/agent') as {
-    NGuardAgentEngine: new (deps: {
-      aiProvider: unknown;
-      vectorStore: unknown;
-    }) => AgentEngine;
-  };
-
-  return new engineModule.NGuardAgentEngine({ aiProvider, vectorStore });
-}
-
-function resolveAIProvider(): unknown {
-  const providerName = process.env.AI_PROVIDER ?? 'mock';
-
-  if (providerName === 'mock') {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { MockAIProvider } = require('@n-guard/agent') as {
-      MockAIProvider: new () => unknown;
-    };
-    return new MockAIProvider();
-  }
-
-  // Future: 'aicore' → AICoreAIProvider
-  throw new Error(
-    `Unknown AI_PROVIDER="${providerName}". Supported: mock | aicore`,
-  );
-}
-
-function resolveVectorStore(): unknown {
-  const storeName = process.env.VECTOR_STORE ?? 'mock';
-
-  if (storeName === 'mock') {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { MockVectorStore } = require('@n-guard/agent') as {
-      MockVectorStore: new () => unknown;
-    };
-    return new MockVectorStore();
-  }
-
-  // Future: 'hana' → HanaVectorStore
-  throw new Error(
-    `Unknown VECTOR_STORE="${storeName}". Supported: mock | hana`,
-  );
 }

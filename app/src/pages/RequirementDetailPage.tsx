@@ -7,8 +7,9 @@
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDesignRequestById, updateDesignRequest, deleteDesignRequest } from '../api/client.js';
-import type { DesignRequest } from '../types/api.js';
+import { getDesignRequestById, updateDesignRequest, deleteDesignRequest, submitForAssessment, listAssessments } from '../api/client.js';
+import type { DesignRequest, ComplianceAssessment, FitClassification } from '../types/api.js';
+import { FIT_CLASSIFICATION_LABELS, FIT_CLASSIFICATION_COLORS, CONFIDENCE_LABELS } from '../types/api.js';
 import {
   WORK_ITEM_TYPE_LABELS, WORK_ITEM_TYPES,
   WORK_ITEM_PRIORITY_LABELS, WORK_ITEM_PRIORITIES,
@@ -198,14 +199,122 @@ export default function RequirementDetailPage({ id }: Props) {
         )}
       </div>
 
-      {/* Assessment placeholder */}
-      <div style={{ background:'#fefce8', border:'1px solid #fde047', borderRadius:8, padding:'1rem 1.25rem' }}>
-        <h3 style={{ fontSize:'0.9rem', fontWeight:600, color:'#92400e', margin:'0 0 0.4rem' }}>Fit-to-Standard Assessment</h3>
-        <p style={{ fontSize:'0.825rem', color:'#78350f', margin:0, lineHeight:1.6 }}>
-          No assessment has been run for this item yet.
-          Assessment capability will be available in Phase 7 (Fit-to-Standard Assessment Engine).
-        </p>
+      {/* Assessment section */}
+      <AssessmentSection designRequestId={item.ID} status={item.status} onRefresh={load} />
+    </div>
+  );
+}
+
+// ── Assessment Section ────────────────────────────────────────────────────────
+
+function AssessmentSection({ designRequestId, status, onRefresh }: {
+  designRequestId: string;
+  status: string;
+  onRefresh: () => void;
+}) {
+  const [assessment, setAssessment]     = useState<ComplianceAssessment | null>(null);
+  const [submitting, setSubmitting]     = useState(false);
+  const [pollCount, setPollCount]       = useState(0);
+
+  const loadAssessment = useCallback(async () => {
+    try {
+      const list = await listAssessments(designRequestId);
+      if (list.length > 0) {
+        // Get most recent
+        const sorted = [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setAssessment(sorted[0]);
+      }
+    } catch { /* ignore */ }
+  }, [designRequestId]);
+
+  useEffect(() => { void loadAssessment(); }, [loadAssessment]);
+
+  // Poll while PENDING or assessment running
+  useEffect(() => {
+    if (!assessment || assessment.status === 'COMPLETED' || assessment.status === 'FAILED') return;
+    const id = setInterval(() => {
+      setPollCount(c => c + 1);
+      void loadAssessment();
+    }, 3000);
+    return () => clearInterval(id);
+  }, [assessment, loadAssessment]);
+
+  void pollCount; // suppress unused warning
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      await submitForAssessment(designRequestId);
+      onRefresh();
+      void loadAssessment();
+      // Start polling
+      setTimeout(() => { void loadAssessment(); }, 2000);
+      setTimeout(() => { void loadAssessment(); }, 5000);
+      setTimeout(() => { void loadAssessment(); }, 10000);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const canSubmit = status === 'DRAFT' || status === 'SUBMITTED';
+  const fc = assessment?.fitClassification as FitClassification | undefined;
+
+  return (
+    <div style={{ background:'#1e293b', border:'1px solid #334155', borderRadius:8, padding:'1.25rem', marginTop:'1rem' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+        <h3 style={{ fontSize:13, fontWeight:700, color:'#94a3b8', textTransform:'uppercase', letterSpacing:1, margin:0 }}>
+          Fit-to-Standard Assessment
+        </h3>
+        {canSubmit && (
+          <button
+            onClick={() => void handleSubmit()}
+            disabled={submitting}
+            style={{ padding:'6px 14px', background: submitting ? '#334155' : '#3b82f6', color:'#fff', border:'none', borderRadius:6, fontSize:12, fontWeight:600, cursor: submitting ? 'default' : 'pointer' }}
+          >
+            {submitting ? '⏳ Submitting…' : '▶ Submit for Assessment'}
+          </button>
+        )}
       </div>
+
+      {!assessment && (
+        <p style={{ color:'#64748b', fontSize:13, margin:0 }}>
+          No assessment has been run yet. Click "Submit for Assessment" to start.
+        </p>
+      )}
+
+      {assessment && assessment.status === 'PENDING' && (
+        <p style={{ color:'#facc15', fontSize:13, margin:0 }}>⏳ Assessment queued…</p>
+      )}
+
+      {assessment && (assessment.status === 'PROCESSING' || (assessment.status === 'PENDING' && status === 'ASSESSING')) && (
+        <p style={{ color:'#60a5fa', fontSize:13, margin:0 }}>⚙️ Running F1-F8 assessment…</p>
+      )}
+
+      {assessment && assessment.status === 'FAILED' && (
+        <p style={{ color:'#f87171', fontSize:13, margin:0 }}>⚠️ Assessment failed: {assessment.rationale}</p>
+      )}
+
+      {assessment && assessment.status === 'COMPLETED' && fc && (
+        <div>
+          <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
+            <span style={{ fontSize:28, fontWeight:800, color: FIT_CLASSIFICATION_COLORS[fc] }}>{fc}</span>
+            <div>
+              <div style={{ color:'#f1f5f9', fontSize:13, fontWeight:600 }}>{FIT_CLASSIFICATION_LABELS[fc]}</div>
+              {assessment.evidenceConfidence && (
+                <div style={{ color:'#94a3b8', fontSize:11 }}>Confidence: {CONFIDENCE_LABELS[assessment.evidenceConfidence]}</div>
+              )}
+            </div>
+          </div>
+          {assessment.businessIntentSummary && (
+            <p style={{ color:'#cbd5e1', fontSize:12, margin:'0 0 8px' }}>{assessment.businessIntentSummary}</p>
+          )}
+          {assessment.recommendedNextAction && (
+            <p style={{ color:'#94a3b8', fontSize:11, margin:0 }}>→ {assessment.recommendedNextAction}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

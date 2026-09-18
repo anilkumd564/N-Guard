@@ -26,7 +26,7 @@ function makeInfoResponse(): { name: string; version: string; environment: strin
     name        : 'n-guard',
     version     : process.env.npm_package_version ?? '0.1.0',
     environment : process.env.NODE_ENV ?? 'development',
-      phase       : '5 — Edition/Release-Aware Retrieval and RAG Foundation',
+      phase       : '6 — N-Guard Agent Orchestration Core',
   };
 }
 
@@ -54,7 +54,7 @@ describe('AppService — info response', () => {
     expect(makeInfoResponse().version.length).toBeGreaterThan(0);
   });
 
-  it('phase label references Phase 5', () => {
-    expect(makeInfoResponse().phase).toContain('5');
+  it('phase label references Phase 6', () => {
+    expect(makeInfoResponse().phase).toContain('6');
   });
 });

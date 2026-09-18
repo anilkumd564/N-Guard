@@ -334,6 +334,53 @@ entity IngestionJobs : cuid, managed {
   completedAt     : Timestamp;
 }
 
+// ─── Phase 6: Agent Orchestration Persistence ────────────────────────────────
+
+/**
+ * AgentRuns persists the metadata of every agent orchestration execution.
+ * Enables auditing and debugging of AI-driven assessments (architecture rule 4).
+ * Every run is linked to a DesignRequest and (optionally) a ComplianceAssessment.
+ */
+entity AgentRuns : cuid, managed {
+  designRequest    : Association to DesignRequests    not null;
+  project          : Association to Projects          not null;
+  tenant           : Association to Tenants           not null;
+  assessment       : Association to ComplianceAssessments;
+  status           : String(20)   not null;  // PENDING|RUNNING|COMPLETED|FAILED|TIMEOUT
+  modelProvider    : String(100);
+  modelName        : String(100);
+  promptTokens     : Integer default 0;
+  completionTokens : Integer default 0;
+  latencyMs        : Integer default 0;
+  retryCount       : Integer default 0;
+  error            : String(2000);
+  evidenceCount    : Integer default 0;
+  schemaVersion    : String(20);
+  validationPassed : Boolean;
+  startedAt        : Timestamp;
+  completedAt      : Timestamp;
+  evidenceRefs     : Composition of many EvidenceReferences on evidenceRefs.agentRun = $self;
+}
+
+/**
+ * EvidenceReferences records which knowledge chunks were used as evidence
+ * in each AgentRun.  Enables full traceability from verdict to source.
+ */
+entity EvidenceReferences : cuid {
+  agentRun          : Association to AgentRuns not null;
+  tenant            : Association to Tenants;
+  chunkId           : String(500)  not null;
+  documentId        : String(500);
+  knowledgeSourceId : String(500);
+  title             : String(500);
+  excerpt           : LargeString;
+  edition           : S4Edition;
+  release           : S4Release;
+  authorityLevel    : String(20);
+  source            : String(1000);
+  score             : Decimal(5, 4);  // 0.0000 – 1.0000
+}
+
 /**
  * AuditLogs — immutable event log.
  */

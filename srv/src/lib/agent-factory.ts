@@ -19,6 +19,30 @@ import type { AgentEngine } from '../types/agent.js';
 
 let _engine: AgentEngine | null = null;
 
+// ─── Orchestrator factory ─────────────────────────────────────────────────────
+
+/**
+ * Lazily build the AgentOrchestrator for Phase 6 assessment pipeline.
+ * Returns the orchestrator object from the agent package at runtime.
+ */
+export function getAgentOrchestrator() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { AgentOrchestrator, KnowledgeSearchService } = require('@n-guard/agent') as {
+    AgentOrchestrator    : new (deps: {
+      aiProvider            : unknown;
+      knowledgeSearchService: unknown;
+      options?              : Record<string, unknown>;
+    }) => { run(input: unknown, context: unknown): Promise<unknown> };
+    KnowledgeSearchService: new (deps: { store: unknown; aiProvider: unknown }) => unknown;
+  };
+
+  const aiProvider = resolveAIProvider();
+  const store      = resolveVectorStore();
+  const search     = new KnowledgeSearchService({ store, aiProvider });
+
+  return new AgentOrchestrator({ aiProvider, knowledgeSearchService: search });
+}
+
 /**
  * Returns the singleton AgentEngine.
  * Lazily initialised on first call with providers resolved from env vars.

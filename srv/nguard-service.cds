@@ -62,6 +62,16 @@ service NGuardService {
   @readonly
   entity IngestionJobs as projection on nguard.IngestionJobs;
 
+  // ── Phase 6: Agent Orchestration ─────────────────────────────────────────
+  /** AgentRuns — audit trail of every orchestration execution. */
+  @readonly
+  entity AgentRuns as projection on nguard.AgentRuns
+    excluding { evidenceRefs };
+
+  /** EvidenceReferences — traceable evidence used in each run. */
+  @readonly
+  entity EvidenceReferences as projection on nguard.EvidenceReferences;
+
   // ── Unbound Actions ────────────────────────────────────────────────────────
 
   action createProject(

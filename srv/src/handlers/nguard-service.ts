@@ -21,7 +21,7 @@
 
 import cds from '@sap/cds';
 import { createAuditLog } from '../lib/audit.js';
-import { getAgentEngine } from '../lib/agent-factory.js';
+import { getAgentEngine, getAgentOrchestrator } from '../lib/agent-factory.js';
 import type { AssessmentRecommendation } from '../types/agent.js';
 import {
   validateProject,
@@ -295,34 +295,89 @@ export default class NGuardServiceHandler extends cds.ApplicationService {
       });
 
       setImmediate(async () => {
-        const engine = getAgentEngine();
+        const engine       = getAgentEngine();
+        const orchestrator = getAgentOrchestrator();
         try {
-          const result = await engine.assess({
-            designRequestId,
-            projectId       : dr.project_ID,
-            tenantId        : dr.tenant_ID,
-            title           : dr.title,
-            description     : dr.description,
-            businessProcess : dr.businessProcess,
-            module          : dr.module,
-            edition         : project.edition,
-            release         : project.release,
+          // Phase 6: run via AgentOrchestrator for full audit trail + schema validation
+          const agentRun = await (orchestrator as {
+            run(input: unknown, context: unknown): Promise<{
+              status           : string;
+              error?           : string;
+              result?          : { verdict: string; rationale: string; confidence: number; recommendations: AssessmentRecommendation[]; evidenceReferences: unknown[] };
+              modelProvider    : string;
+              modelName        : string;
+              promptTokens     : number;
+              completionTokens : number;
+              latencyMs        : number;
+              retryCount       : number;
+              evidenceCount    : number;
+              schemaVersion    : string;
+              validationPassed : boolean;
+              startedAt        : string;
+              completedAt?     : string;
+              evidenceReferences: unknown[];
+            }>;
+          }).run(
+            {
+              designRequestId,
+              projectId       : dr.project_ID,
+              tenantId        : dr.tenant_ID,
+              title           : dr.title,
+              description     : dr.description,
+              businessProcess : dr.businessProcess,
+              module          : dr.module,
+              edition         : project.edition,
+              release         : project.release,
+            },
+            {
+              tenantId        : dr.tenant_ID,
+              projectId       : dr.project_ID,
+              deploymentModel : project.edition,
+              release         : project.release,
+            },
+          );
+
+          // Persist AgentRun record
+          await INSERT.into('nguard.AgentRuns').entries({
+            designRequest_ID : designRequestId,
+            project_ID       : dr.project_ID,
+            tenant_ID        : dr.tenant_ID,
+            assessment_ID    : assessment?.ID,
+            status           : agentRun.status,
+            modelProvider    : agentRun.modelProvider,
+            modelName        : agentRun.modelName,
+            promptTokens     : agentRun.promptTokens,
+            completionTokens : agentRun.completionTokens,
+            latencyMs        : agentRun.latencyMs,
+            retryCount       : agentRun.retryCount,
+            error            : agentRun.error ?? null,
+            evidenceCount    : agentRun.evidenceCount,
+            schemaVersion    : agentRun.schemaVersion,
+            validationPassed : agentRun.validationPassed,
+            startedAt        : agentRun.startedAt,
+            completedAt      : agentRun.completedAt ?? null,
           });
+
+          const result = agentRun.result;
+          const verdict     = result?.verdict    ?? 'NEEDS_REVIEW';
+          const rationale   = result?.rationale  ?? 'Agent run did not produce a result.';
+          const confidence  = result?.confidence ?? 0;
+          const recs        = result?.recommendations ?? [];
 
           await update('nguard.ComplianceAssessments')
             .set({
-              status          : 'COMPLETED',
-              verdict         : result.verdict,
-              rationale       : result.rationale,
-              evidenceSources : JSON.stringify(result.evidenceSources),
-              confidence      : result.confidence,
+              status          : agentRun.status === 'COMPLETED' ? 'COMPLETED' : 'FAILED',
+              verdict,
+              rationale,
+              evidenceSources : JSON.stringify(agentRun.evidenceReferences ?? []),
+              confidence,
               processedAt     : new Date().toISOString(),
             })
             .where({ ID: assessment?.ID });
 
-          if (result.recommendations?.length) {
+          if (recs.length) {
             await INSERT.into('nguard.Recommendations').entries(
-              result.recommendations.map((r: AssessmentRecommendation, i: number) => ({
+              recs.map((r: AssessmentRecommendation, i: number) => ({
                 assessment_ID : assessment?.ID,
                 sequence      : i + 1,
                 type          : r.type,
@@ -335,25 +390,46 @@ export default class NGuardServiceHandler extends cds.ApplicationService {
           }
 
           await update('nguard.DesignRequests')
-            .set({ status: 'ASSESSED' })
+            .set({ status: agentRun.status === 'COMPLETED' ? 'ASSESSED' : 'SUBMITTED' })
             .where({ ID: designRequestId });
 
           await createAuditLog(req, {
             entityType : 'ComplianceAssessment',
             entityId   : assessment?.ID,
             action     : 'ASSESS',
-            details    : JSON.stringify({ verdict: result.verdict, confidence: result.confidence }),
+            details    : JSON.stringify({ verdict, confidence, agentStatus: agentRun.status }),
           });
 
         } catch (err: unknown) {
+          // Fallback to direct engine if orchestrator fails (backward compat)
           const message = err instanceof Error ? err.message : String(err);
-          await update('nguard.ComplianceAssessments')
-            .set({ status: 'FAILED', rationale: `Agent error: ${message}` })
-            .where({ ID: assessment?.ID });
-
-          await update('nguard.DesignRequests')
-            .set({ status: 'SUBMITTED' })
-            .where({ ID: designRequestId });
+          const log = cds.log('assess');
+          log.warn(`AgentOrchestrator failed, falling back to AgentEngine: ${message}`);
+          try {
+            const result = await engine.assess({
+              designRequestId,
+              projectId       : dr.project_ID,
+              tenantId        : dr.tenant_ID,
+              title           : dr.title,
+              description     : dr.description,
+              businessProcess : dr.businessProcess,
+              module          : dr.module,
+              edition         : project.edition,
+              release         : project.release,
+            });
+            await update('nguard.ComplianceAssessments')
+              .set({ status: 'COMPLETED', verdict: result.verdict, rationale: result.rationale,
+                     evidenceSources: JSON.stringify(result.evidenceSources),
+                     confidence: result.confidence, processedAt: new Date().toISOString() })
+              .where({ ID: assessment?.ID });
+            await update('nguard.DesignRequests').set({ status: 'ASSESSED' }).where({ ID: designRequestId });
+          } catch (err2: unknown) {
+            const msg2 = err2 instanceof Error ? err2.message : String(err2);
+            await update('nguard.ComplianceAssessments')
+              .set({ status: 'FAILED', rationale: `Agent error: ${msg2}` })
+              .where({ ID: assessment?.ID });
+            await update('nguard.DesignRequests').set({ status: 'SUBMITTED' }).where({ ID: designRequestId });
+          }
         }
       });
 

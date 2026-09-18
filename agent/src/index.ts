@@ -62,6 +62,18 @@ export type {
   HttpMethod,
 } from './providers/IntegrationProvider.js';
 
+// Phase 6: Orchestration
+export { AgentOrchestrator }  from './orchestration/AgentOrchestrator.js';
+export type {
+  AgentContext,
+  AgentTool,
+  AgentRun,
+  AgentRunStatus,
+  EvidenceReference,
+  StructuredAgentResult,
+  OrchestratorOptions,
+} from './orchestration/types.js';
+
 // Phase 5: Retrieval
 export { KnowledgeSearchService } from './retrieval/KnowledgeSearchService.js';
 export type {

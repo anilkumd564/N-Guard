@@ -486,6 +486,65 @@ export interface CrossEditionSummary {
   editionsWithInsufficient : S4Edition[];
 }
 
+// ─── Phase 9: Clean Core Analysis types ──────────────────────────────────────
+
+export type CleanCoreTier = 'TIER_1' | 'TIER_2' | 'TIER_3' | 'TIER_4';
+export type CleanCoreRisk = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type ExtensibilityTechnique =
+  | 'STANDARD_ADOPTION' | 'CONFIGURATION' | 'KEY_USER_EXTENSIBILITY'
+  | 'DEVELOPER_EXTENSIBILITY' | 'BTP_SIDE_BY_SIDE' | 'CLASSIC_CUSTOM';
+
+export const CLEAN_CORE_TIER_LABELS: Record<CleanCoreTier, string> = {
+  TIER_1: 'Tier 1 — Core (SAP Standard Only)',
+  TIER_2: 'Tier 2 — Stable (Configuration + Key-User)',
+  TIER_3: 'Tier 3 — Resilient (Developer + BTP Side-by-Side)',
+  TIER_4: 'Tier 4 — Exception (Classic Custom; Requires Approval)',
+};
+
+export const CLEAN_CORE_TIER_COLORS: Record<CleanCoreTier, string> = {
+  TIER_1: '#22c55e', TIER_2: '#84cc16', TIER_3: '#fb923c', TIER_4: '#ef4444',
+};
+
+export const CLEAN_CORE_RISK_COLORS: Record<CleanCoreRisk, string> = {
+  LOW: '#22c55e', MEDIUM: '#facc15', HIGH: '#f97316', CRITICAL: '#ef4444',
+};
+
+export const EXTENSIBILITY_TECHNIQUE_LABELS: Record<ExtensibilityTechnique, string> = {
+  STANDARD_ADOPTION      : 'Standard Process Adoption',
+  CONFIGURATION          : 'Standard Configuration (Customizing)',
+  KEY_USER_EXTENSIBILITY : 'Key-User / In-App Extensibility',
+  DEVELOPER_EXTENSIBILITY: 'Developer / On-Stack Extensibility',
+  BTP_SIDE_BY_SIDE       : 'SAP BTP Side-by-Side Extension',
+  CLASSIC_CUSTOM         : 'Classic Custom Code (Exception Required)',
+};
+
+export interface CleanCoreAnalysis {
+  ID?                        : string;
+  designRequest_ID           : string;
+  project_ID                 : string;
+  tenant_ID                  : string;
+  assessment_ID?             : string;
+  catalogVersion?            : string;
+  schemaVersion?             : string;
+  edition                    : S4Edition;
+  release?                   : string;
+  cleanCorePolicy?           : string;
+  fitClassification?         : FitClassification;
+  proposedApproach?          : string;
+  preferredTechnique?        : ExtensibilityTechnique;
+  cleanCoreTier?             : CleanCoreTier;
+  riskLevel?                 : CleanCoreRisk;
+  requiredArchitectureReview?: boolean;
+  requiresException?         : boolean;
+  saferAlternative?          : ExtensibilityTechnique;
+  concerns?                  : string;  // JSON: string[]
+  riskFactors?               : string;  // JSON: string[]
+  unknowns?                  : string;  // JSON: string[]
+  techniqueApplicability?    : string;  // JSON: TechniqueApplicability[]
+  createdAt?                 : string;
+  modifiedAt?                : string;
+}
+
 // ─── API response wrappers ────────────────────────────────────────────────────
 
 export interface ODataListResponse<T> {

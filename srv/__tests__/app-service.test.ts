@@ -26,7 +26,7 @@ function makeInfoResponse(): { name: string; version: string; environment: strin
     name        : 'n-guard',
     version     : process.env.npm_package_version ?? '0.1.0',
     environment : process.env.NODE_ENV ?? 'development',
-      phase       : '8 — Cross-Edition S/4HANA Comparison',
+      phase       : '9 — Clean Core and Extensibility Governance',
   };
 }
 
@@ -54,7 +54,7 @@ describe('AppService — info response', () => {
     expect(makeInfoResponse().version.length).toBeGreaterThan(0);
   });
 
-  it('phase label references Phase 8', () => {
-    expect(makeInfoResponse().phase).toContain('8');
+  it('phase label references Phase 9', () => {
+    expect(makeInfoResponse().phase).toContain('9');
   });
 });

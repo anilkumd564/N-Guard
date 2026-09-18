@@ -8,7 +8,7 @@
 
 import cds from '@sap/cds';
 import { createAuditLog } from '../lib/audit.js';
-import { getAgentEngine, getAgentOrchestrator, getFitAssessmentEngine, getCrossEditionComparisonEngine } from '../lib/agent-factory.js';
+import { getAgentEngine, getAgentOrchestrator, getFitAssessmentEngine, getCrossEditionComparisonEngine, getCleanCoreAnalyzer } from '../lib/agent-factory.js';
 import type { AssessmentRecommendation } from '../types/agent.js';
 import { validateProject, validateDeploymentProfile } from '../types/domain.js';
 import { registerWorkspaceValidation, handleImportRequirements, handleExportRequirements } from './workspace-handler.js';
@@ -294,6 +294,79 @@ export default class NGuardServiceHandler extends cds.ApplicationService {
     this.on('exportRequirements', async (req: cds.Request) => {
       const { projectId, workItemType } = req.data as { projectId: string; workItemType?: string };
       return handleExportRequirements(req, projectId, workItemType);
+    });
+
+    // ── runCleanCoreAnalysis (Phase 9) ──────────────────────────────────────
+    this.on('runCleanCoreAnalysis', async (req: cds.Request) => {
+      const { designRequestId, proposedApproach } = req.data as { designRequestId: string; proposedApproach?: string };
+      if (!designRequestId) return req.error(400, 'designRequestId is required');
+
+      const dr = await SELECT.one.from('nguard.DesignRequests').where({ ID: designRequestId })
+        .columns('ID','title','description','businessProcess','module','status','tenant_ID','project_ID');
+      if (!dr) return req.error(404, `DesignRequest ${designRequestId} not found`);
+
+      const project = await SELECT.one.from('nguard.Projects').where({ ID: dr.project_ID })
+        .columns('ID','edition','release','cleanCorePolicy','tenant_ID');
+      if (!project) return req.error(404, `Project ${dr.project_ID} not found`);
+
+      // Get most recent assessment for fit classification context
+      const assessment = await SELECT.one.from('nguard.ComplianceAssessments')
+        .where({ designRequest_ID: designRequestId })
+        .orderBy('createdAt desc')
+        .columns('ID','fitClassification','businessIntentSummary','gapDescription','configurationOpportunity');
+
+      const ccAnalyzer = getCleanCoreAnalyzer();
+      const analysisResult = ccAnalyzer.analyze({
+        designRequestId,
+        projectId         : dr.project_ID,
+        tenantId          : dr.tenant_ID,
+        edition           : project.edition,
+        release           : project.release ?? undefined,
+        cleanCorePolicy   : project.cleanCorePolicy ?? 'NOT_SET',
+        fitClassification : (assessment?.fitClassification ?? 'F8') as string,
+        proposedApproach  : proposedApproach ?? dr.description ?? '',
+        businessIntent    : assessment?.businessIntentSummary ?? dr.title,
+        gapDescription    : assessment?.gapDescription ?? undefined,
+        configurationOpportunity: assessment?.configurationOpportunity ?? undefined,
+      });
+
+      const [saved] = await INSERT.into('nguard.CleanCoreAnalyses').entries({
+        designRequest_ID           : designRequestId,
+        project_ID                 : dr.project_ID,
+        tenant_ID                  : dr.tenant_ID,
+        assessment_ID              : assessment?.ID ?? null,
+        catalogVersion             : '1.0',
+        schemaVersion              : analysisResult.schemaVersion,
+        edition                    : project.edition,
+        release                    : project.release ?? null,
+        cleanCorePolicy            : project.cleanCorePolicy ?? 'NOT_SET',
+        fitClassification          : analysisResult.appliedRules[0]?.catalogVersion ?? null,
+        proposedApproach           : proposedApproach ?? null,
+        preferredTechnique         : analysisResult.preferredTechnique,
+        cleanCoreTier              : analysisResult.cleanCoreTier,
+        riskLevel                  : analysisResult.riskLevel,
+        requiredArchitectureReview : analysisResult.requiredArchitectureReview,
+        requiresException          : analysisResult.requiresException,
+        saferAlternative           : analysisResult.saferAlternative ?? null,
+        concerns                   : JSON.stringify(analysisResult.concerns),
+        riskFactors                : JSON.stringify(analysisResult.riskFactors),
+        unknowns                   : JSON.stringify(analysisResult.unknowns),
+        techniqueApplicability     : JSON.stringify(analysisResult.techniqueApplicability),
+      });
+
+      await createAuditLog(req, {
+        entityType : 'CleanCoreAnalysis',
+        entityId   : saved?.ID,
+        action     : 'ANALYZE',
+        details    : JSON.stringify({
+          designRequestId,
+          preferredTechnique : analysisResult.preferredTechnique,
+          cleanCoreTier      : analysisResult.cleanCoreTier,
+          riskLevel          : analysisResult.riskLevel,
+        }),
+      });
+
+      return saved;
     });
 
     // ── runCrossEditionComparison (Phase 8) ─────────────────────────────────

@@ -395,6 +395,31 @@ export async function listEditionComparisonResults(
   return data.value;
 }
 
+// ─── Clean Core Analysis ──────────────────────────────────────────────────────
+
+export async function runCleanCoreAnalysis(
+  designRequestId : string,
+  proposedApproach: string,
+): Promise<import('../types/api.js').CleanCoreAnalysis> {
+  const result = await request<{ value: import('../types/api.js').CleanCoreAnalysis }>(
+    '/runCleanCoreAnalysis',
+    { method: 'POST', body: JSON.stringify({ designRequestId, proposedApproach }) },
+  );
+  return result.value;
+}
+
+export async function listCleanCoreAnalyses(
+  designRequestId?: string,
+): Promise<import('../types/api.js').CleanCoreAnalysis[]> {
+  const filter = designRequestId
+    ? `?$filter=designRequest_ID eq ${designRequestId}&$orderby=createdAt desc`
+    : '?$orderby=createdAt desc';
+  const data = await request<import('../types/api.js').ODataListResponse<import('../types/api.js').CleanCoreAnalysis>>(
+    `/CleanCoreAnalyses${filter}`,
+  );
+  return data.value;
+}
+
 export async function listAssessments(
   designRequestId?: string,
 ): Promise<ComplianceAssessment[]> {

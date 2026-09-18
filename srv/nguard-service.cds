@@ -72,6 +72,11 @@ service NGuardService {
   @readonly
   entity EvidenceReferences as projection on nguard.EvidenceReferences;
 
+  // ── Phase 9: Clean Core Analysis ─────────────────────────────────────────
+  /** CleanCoreAnalyses — audit trail of Clean Core governance decisions. */
+  @readonly
+  entity CleanCoreAnalyses as projection on nguard.CleanCoreAnalyses;
+
   // ── Phase 8: Cross-Edition Comparison ────────────────────────────────────
   /** CrossEditionComparisons — audit trail of comparison runs. */
   @readonly
@@ -158,6 +163,16 @@ service NGuardService {
    */
   action runCrossEditionComparison(designRequestId : UUID)
     returns CrossEditionComparisons;
+
+  /**
+   * Run Clean Core analysis for a design request.
+   * Uses the versioned rule catalog — NOT buried in prompt text.
+   * Returns the persisted CleanCoreAnalyses record.
+   */
+  action runCleanCoreAnalysis(
+    designRequestId  : UUID,
+    proposedApproach : String
+  ) returns CleanCoreAnalyses;
 
   action approveAssessment(assessmentId : UUID, notes : String)
     returns Boolean;

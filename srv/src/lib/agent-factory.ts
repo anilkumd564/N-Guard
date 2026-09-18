@@ -44,6 +44,45 @@ export function getAgentOrchestrator() {
 }
 
 /**
+ * Get the CleanCoreAnalyzer for Phase 9 Clean Core governance.
+ */
+export function getCleanCoreAnalyzer() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { CleanCoreAnalyzer } = require('@n-guard/agent') as {
+    CleanCoreAnalyzer: new (catalog?: unknown) => {
+      analyze(input: {
+        designRequestId       : string;
+        projectId             : string;
+        tenantId              : string;
+        edition               : string;
+        release?              : string;
+        cleanCorePolicy?      : string;
+        fitClassification?    : string;
+        proposedApproach      : string;
+        businessIntent?       : string;
+        gapDescription?       : string;
+        configurationOpportunity?: string;
+      }): {
+        analysisId                 : string;
+        schemaVersion              : string;
+        preferredTechnique         : string;
+        cleanCoreTier              : string;
+        riskLevel                  : string;
+        concerns                   : string[];
+        riskFactors                : string[];
+        requiredArchitectureReview : boolean;
+        requiresException          : boolean;
+        saferAlternative?          : string;
+        unknowns                   : string[];
+        appliedRules               : Array<{ catalogVersion: string }>;
+        techniqueApplicability     : unknown[];
+      };
+    };
+  };
+  return new CleanCoreAnalyzer();
+}
+
+/**
  * Get the CrossEditionComparisonEngine for Phase 8 cross-edition comparisons.
  */
 export function getCrossEditionComparisonEngine() {

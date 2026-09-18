@@ -62,6 +62,27 @@ export type {
   HttpMethod,
 } from './providers/IntegrationProvider.js';
 
+// Phase 9: Clean Core and Extensibility Governance
+export { CleanCoreAnalyzer }       from './cleancore/CleanCoreAnalyzer.js';
+export { DEFAULT_CATALOG, getRulesForEdition, getRuleForTechnique } from './cleancore/catalog.js';
+export type {
+  CleanCoreTier,
+  CleanCoreRisk,
+  ExtensibilityTechnique,
+  CleanCoreRule,
+  CleanCoreCatalog,
+  CleanCoreAnalysisInput,
+  CleanCoreAnalysisResult,
+  TechniqueApplicability,
+} from './cleancore/types.js';
+export {
+  CLEAN_CORE_TIER_LABELS,
+  CLEAN_CORE_TIER_COLORS,
+  EXTENSIBILITY_TECHNIQUE_LABELS,
+  TECHNIQUE_TIER,
+  CLEAN_CORE_RISK_COLORS,
+} from './cleancore/types.js';
+
 // Phase 8: Cross-Edition Comparison
 export { CrossEditionComparisonEngine } from './comparison/CrossEditionComparisonEngine.js';
 export type {

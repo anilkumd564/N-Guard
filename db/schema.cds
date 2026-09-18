@@ -442,6 +442,39 @@ entity EditionComparisonResults : cuid {
   validationPassed        : Boolean default false;
 }
 
+// ─── Phase 9: Clean Core Analysis Persistence ────────────────────────────────
+
+/**
+ * CleanCoreAnalyses stores the result of running the CleanCoreAnalyzer
+ * against a design request/assessment.  Enables audit trail of all
+ * Clean Core governance decisions.
+ */
+entity CleanCoreAnalyses : cuid, managed {
+  designRequest              : Association to DesignRequests not null;
+  project                    : Association to Projects       not null;
+  tenant                     : Association to Tenants        not null;
+  assessment                 : Association to ComplianceAssessments;
+  // Analysis metadata
+  catalogVersion             : String(20);
+  schemaVersion              : String(10);
+  edition                    : S4Edition   not null;
+  release                    : S4Release;
+  cleanCorePolicy            : String(20);
+  fitClassification          : String(5);   // F1-F8 from Phase 7 assessment
+  proposedApproach           : LargeString;
+  // Analysis result
+  preferredTechnique         : String(50);  // ExtensibilityTechnique
+  cleanCoreTier              : String(10);  // TIER_1|TIER_2|TIER_3|TIER_4
+  riskLevel                  : String(20);  // LOW|MEDIUM|HIGH|CRITICAL
+  requiredArchitectureReview : Boolean default false;
+  requiresException          : Boolean default false;
+  saferAlternative           : String(50);
+  concerns                   : LargeString; // JSON: string[]
+  riskFactors                : LargeString; // JSON: string[]
+  unknowns                   : LargeString; // JSON: string[]
+  techniqueApplicability     : LargeString; // JSON: TechniqueApplicability[]
+}
+
 /**
  * AuditLogs — immutable event log.
  */

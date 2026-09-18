@@ -72,6 +72,11 @@ service NGuardService {
   @readonly
   entity EvidenceReferences as projection on nguard.EvidenceReferences;
 
+  // ── Phase 10: Human Review Workflow ──────────────────────────────────────
+  /** DesignDecisions — Design Decision / Exception Register (rule 5: AI never final approver). */
+  @readonly
+  entity DesignDecisions as projection on nguard.DesignDecisions;
+
   // ── Phase 9: Clean Core Analysis ─────────────────────────────────────────
   /** CleanCoreAnalyses — audit trail of Clean Core governance decisions. */
   @readonly
@@ -173,6 +178,27 @@ service NGuardService {
     designRequestId  : UUID,
     proposedApproach : String
   ) returns CleanCoreAnalyses;
+
+  /**
+   * Submit a completed assessment for human review.
+   * Transitions the assessment into PENDING_REVIEW status.
+   */
+  action submitForReview(assessmentId : UUID)
+    returns DesignDecisions;
+
+  /**
+   * Record a human review decision on an assessment.
+   * Rule 5: AI is never the actor — actor is always a human identifier.
+   * APPROVE_EXCEPTION and REJECT_CUSTOMIZATION require rationale.
+   */
+  action recordReviewDecision(
+    assessmentId     : UUID,
+    reviewAction     : String,
+    actor            : String,
+    rationale        : LargeString,
+    modifiedVerdict  : String,
+    dispositionNotes : LargeString
+  ) returns DesignDecisions;
 
   action approveAssessment(assessmentId : UUID, notes : String)
     returns Boolean;

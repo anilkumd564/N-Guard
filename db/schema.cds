@@ -475,6 +475,32 @@ entity CleanCoreAnalyses : cuid, managed {
   techniqueApplicability     : LargeString; // JSON: TechniqueApplicability[]
 }
 
+// ─── Phase 10: Human Review Workflow ─────────────────────────────────────────
+
+/**
+ * DesignDecisions forms the Design Decision / Exception Register.
+ * Records every human governance decision made during review.
+ * Rule 5: AI is NEVER the final approver — isAIFinalApprover is always false.
+ * Rule 4: Every state transition is permanently recorded.
+ */
+entity DesignDecisions : cuid, managed {
+  designRequest      : Association to DesignRequests       not null;
+  project            : Association to Projects             not null;
+  tenant             : Association to Tenants              not null;
+  assessment         : Association to ComplianceAssessments;
+  recordType         : String(20)   not null;  // DECISION|EXCEPTION|ESCALATION
+  reviewAction       : String(30)   not null;  // ACCEPT|MODIFY_DISPOSITION|…
+  newStatus          : String(30)   not null;  // ReviewStatus
+  priorStatus        : String(30)   not null;  // ReviewStatus
+  actor              : String(200)  not null;  // human actor — never 'AI'
+  decidedAt          : Timestamp    not null;
+  rationale          : LargeString;            // required for EXCEPTION/REJECT/MODIFY
+  modifiedVerdict    : String(30);             // set when action = MODIFY_DISPOSITION
+  dispositionNotes   : LargeString;
+  linkedEvidence     : LargeString;            // JSON: EvidenceReference[]
+  isAIFinalApprover  : Boolean default false;  // always false — audit checkpoint
+}
+
 /**
  * AuditLogs — immutable event log.
  */

@@ -62,6 +62,22 @@ export type {
   HttpMethod,
 } from './providers/IntegrationProvider.js';
 
+// Phase 10: Human Review Workflow
+export type {
+  ReviewStatus,
+  ReviewAction,
+  DesignDecision,
+  RecordReviewDecisionInput,
+} from './review/types.js';
+export {
+  REVIEW_STATUS_LABELS,
+  REVIEW_STATUS_COLORS,
+  REVIEW_ACTION_LABELS,
+  ACTION_NEXT_STATUS,
+  RATIONALE_REQUIRED,
+  CONFIDENCE_REVIEW_STATES,
+} from './review/types.js';
+
 // Phase 9: Clean Core and Extensibility Governance
 export { CleanCoreAnalyzer }       from './cleancore/CleanCoreAnalyzer.js';
 export { DEFAULT_CATALOG, getRulesForEdition, getRuleForTechnique } from './cleancore/catalog.js';

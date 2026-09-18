@@ -420,6 +420,45 @@ export async function listCleanCoreAnalyses(
   return data.value;
 }
 
+// ─── Human Review Workflow (Phase 10) ────────────────────────────────────────
+
+export async function submitForReview(
+  assessmentId: string,
+): Promise<import('../types/api.js').DesignDecision> {
+  const result = await request<{ value: import('../types/api.js').DesignDecision }>(
+    '/submitForReview',
+    { method: 'POST', body: JSON.stringify({ assessmentId }) },
+  );
+  return result.value;
+}
+
+export async function recordReviewDecision(payload: {
+  assessmentId     : string;
+  reviewAction     : string;
+  actor            : string;
+  rationale?       : string;
+  modifiedVerdict? : string;
+  dispositionNotes?: string;
+}): Promise<import('../types/api.js').DesignDecision> {
+  const result = await request<{ value: import('../types/api.js').DesignDecision }>(
+    '/recordReviewDecision',
+    { method: 'POST', body: JSON.stringify(payload) },
+  );
+  return result.value;
+}
+
+export async function listDesignDecisions(
+  projectId?: string,
+): Promise<import('../types/api.js').DesignDecision[]> {
+  const filter = projectId
+    ? `?$filter=project_ID eq ${projectId}&$orderby=decidedAt desc`
+    : '?$orderby=decidedAt desc';
+  const data = await request<import('../types/api.js').ODataListResponse<import('../types/api.js').DesignDecision>>(
+    `/DesignDecisions${filter}`,
+  );
+  return data.value;
+}
+
 export async function listAssessments(
   designRequestId?: string,
 ): Promise<ComplianceAssessment[]> {

@@ -545,6 +545,68 @@ export interface CleanCoreAnalysis {
   modifiedAt?                : string;
 }
 
+// ─── Phase 10: Human Review Workflow types ───────────────────────────────────
+
+export type ReviewStatus =
+  | 'NOT_SUBMITTED' | 'PENDING_REVIEW' | 'UNDER_REVIEW' | 'ACCEPTED'
+  | 'MODIFIED' | 'EXCEPTION_APPROVED' | 'REJECTED' | 'RETURNED'
+  | 'SME_ESCALATED' | 'ARCHIVED';
+
+export type ReviewAction =
+  | 'ACCEPT' | 'MODIFY_DISPOSITION' | 'REQUEST_MORE_EVIDENCE'
+  | 'SEND_TO_SME' | 'APPROVE_EXCEPTION' | 'REJECT_CUSTOMIZATION' | 'RETURN_TO_OWNER';
+
+export const REVIEW_STATUS_LABELS: Record<ReviewStatus, string> = {
+  NOT_SUBMITTED     : 'Not Submitted',    PENDING_REVIEW    : 'Pending Review',
+  UNDER_REVIEW      : 'Under Review',     ACCEPTED          : 'Accepted',
+  MODIFIED          : 'Modified',         EXCEPTION_APPROVED: 'Exception Approved',
+  REJECTED          : 'Rejected',         RETURNED          : 'Returned to Owner',
+  SME_ESCALATED     : 'Escalated to SME', ARCHIVED          : 'Archived',
+};
+
+export const REVIEW_STATUS_COLORS: Record<ReviewStatus, string> = {
+  NOT_SUBMITTED     : '#475569', PENDING_REVIEW    : '#94a3b8',
+  UNDER_REVIEW      : '#60a5fa', ACCEPTED          : '#22c55e',
+  MODIFIED          : '#84cc16', EXCEPTION_APPROVED: '#a78bfa',
+  REJECTED          : '#ef4444', RETURNED          : '#facc15',
+  SME_ESCALATED     : '#fb923c', ARCHIVED          : '#334155',
+};
+
+export const REVIEW_ACTION_LABELS: Record<ReviewAction, string> = {
+  ACCEPT                : 'Accept Recommendation',
+  MODIFY_DISPOSITION    : 'Modify Disposition',
+  REQUEST_MORE_EVIDENCE : 'Request More Evidence',
+  SEND_TO_SME           : 'Send to SME Review',
+  APPROVE_EXCEPTION     : 'Approve Exception',
+  REJECT_CUSTOMIZATION  : 'Reject Customization',
+  RETURN_TO_OWNER       : 'Return to Requirement Owner',
+};
+
+export const RATIONALE_REQUIRED_ACTIONS: ReviewAction[] = [
+  'APPROVE_EXCEPTION', 'REJECT_CUSTOMIZATION', 'MODIFY_DISPOSITION',
+];
+
+export interface DesignDecision {
+  ID?               : string;
+  designRequest_ID  : string;
+  project_ID        : string;
+  tenant_ID         : string;
+  assessment_ID?    : string;
+  recordType        : 'DECISION' | 'EXCEPTION' | 'ESCALATION';
+  reviewAction      : ReviewAction;
+  newStatus         : ReviewStatus;
+  priorStatus       : ReviewStatus;
+  actor             : string;
+  decidedAt         : string;
+  rationale?        : string;
+  modifiedVerdict?  : string;
+  dispositionNotes? : string;
+  linkedEvidence?   : string;  // JSON: EvidenceReference[]
+  isAIFinalApprover : false;
+  createdAt?        : string;
+  modifiedAt?       : string;
+}
+
 // ─── API response wrappers ────────────────────────────────────────────────────
 
 export interface ODataListResponse<T> {

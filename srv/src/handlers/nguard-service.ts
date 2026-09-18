@@ -443,6 +443,121 @@ export default class NGuardServiceHandler extends cds.ApplicationService {
       return cmp;
     });
 
+    // ── submitForReview (Phase 10) ────────────────────────────────────────────
+    this.on('submitForReview', async (req: cds.Request) => {
+      const { assessmentId } = req.data as { assessmentId: string };
+      if (!assessmentId) return req.error(400, 'assessmentId is required');
+
+      const assessment = await SELECT.one.from('nguard.ComplianceAssessments')
+        .where({ ID: assessmentId })
+        .columns('ID','designRequest_ID','project_ID','tenant_ID','status');
+      if (!assessment) return req.error(404, `Assessment ${assessmentId} not found`);
+      if (assessment.status !== 'COMPLETED') {
+        return req.error(409, `Cannot submit assessment in status ${assessment.status} for review`);
+      }
+
+      const [decision] = await INSERT.into('nguard.DesignDecisions').entries({
+        designRequest_ID : assessment.designRequest_ID,
+        project_ID       : assessment.project_ID,
+        tenant_ID        : assessment.tenant_ID,
+        assessment_ID    : assessmentId,
+        recordType       : 'DECISION',
+        reviewAction     : 'ACCEPT',         // placeholder — will be updated on real decision
+        newStatus        : 'PENDING_REVIEW',
+        priorStatus      : 'NOT_SUBMITTED',
+        actor            : (req.user?.id as string) ?? 'system',
+        decidedAt        : new Date().toISOString(),
+        isAIFinalApprover: false,
+      });
+
+      await createAuditLog(req, {
+        entityType : 'ComplianceAssessment',
+        entityId   : assessmentId,
+        action     : 'SUBMIT_FOR_REVIEW',
+        details    : JSON.stringify({ decisionId: decision?.ID }),
+      });
+
+      return decision;
+    });
+
+    // ── recordReviewDecision (Phase 10) ───────────────────────────────────────
+    this.on('recordReviewDecision', async (req: cds.Request) => {
+      const {
+        assessmentId, reviewAction, actor,
+        rationale, modifiedVerdict, dispositionNotes,
+      } = req.data as {
+        assessmentId    : string;
+        reviewAction    : string;
+        actor           : string;
+        rationale?      : string;
+        modifiedVerdict?: string;
+        dispositionNotes?: string;
+      };
+
+      if (!assessmentId)  return req.error(400, 'assessmentId is required');
+      if (!reviewAction)  return req.error(400, 'reviewAction is required');
+      if (!actor)         return req.error(400, 'actor is required');
+
+      // Rule 5: AI is never the actor
+      if (actor.toLowerCase() === 'ai' || actor.toLowerCase() === 'system') {
+        return req.error(403, 'AI cannot be recorded as the final approver (architecture rule 5).');
+      }
+
+      // Rationale required for exceptions and rejections
+      const rationaleRequired = ['APPROVE_EXCEPTION', 'REJECT_CUSTOMIZATION', 'MODIFY_DISPOSITION'];
+      if (rationaleRequired.includes(reviewAction) && (!rationale || rationale.trim().length === 0)) {
+        return req.error(400, `Rationale is required for action ${reviewAction}.`);
+      }
+
+      const assessment = await SELECT.one.from('nguard.ComplianceAssessments')
+        .where({ ID: assessmentId })
+        .columns('ID','designRequest_ID','project_ID','tenant_ID','status');
+      if (!assessment) return req.error(404, `Assessment ${assessmentId} not found`);
+
+      // Determine record type from action
+      const recordType = reviewAction === 'APPROVE_EXCEPTION' ? 'EXCEPTION'
+        : reviewAction === 'SEND_TO_SME' ? 'ESCALATION' : 'DECISION';
+
+      // Determine next status from action
+      const STATUS_MAP: Record<string, string> = {
+        ACCEPT                : 'ACCEPTED',
+        MODIFY_DISPOSITION    : 'MODIFIED',
+        REQUEST_MORE_EVIDENCE : 'RETURNED',
+        SEND_TO_SME           : 'SME_ESCALATED',
+        APPROVE_EXCEPTION     : 'EXCEPTION_APPROVED',
+        REJECT_CUSTOMIZATION  : 'REJECTED',
+        RETURN_TO_OWNER       : 'RETURNED',
+      };
+      const newStatus = STATUS_MAP[reviewAction] ?? 'UNDER_REVIEW';
+
+      const [decision] = await INSERT.into('nguard.DesignDecisions').entries({
+        designRequest_ID : assessment.designRequest_ID,
+        project_ID       : assessment.project_ID,
+        tenant_ID        : assessment.tenant_ID,
+        assessment_ID    : assessmentId,
+        recordType,
+        reviewAction,
+        newStatus,
+        priorStatus      : 'PENDING_REVIEW',
+        actor,
+        decidedAt        : new Date().toISOString(),
+        rationale        : rationale ?? null,
+        modifiedVerdict  : modifiedVerdict ?? null,
+        dispositionNotes : dispositionNotes ?? null,
+        linkedEvidence   : '[]',
+        isAIFinalApprover: false,   // Rule 5: ALWAYS false
+      });
+
+      await createAuditLog(req, {
+        entityType : 'DesignDecision',
+        entityId   : decision?.ID,
+        action     : reviewAction,
+        details    : JSON.stringify({ assessmentId, actor, newStatus, recordType }),
+      });
+
+      return decision;
+    });
+
     await super.init();
   }
 }

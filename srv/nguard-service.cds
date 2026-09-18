@@ -206,10 +206,6 @@ service NGuardService {
   ) returns DesignDecisions;
 
   /**
-   * Get aggregated dashboard statistics for a project.
-   * Every metric is derived from stored records — no fabricated KPIs.
-   */
-  /**
    * Submit a background job for asynchronous processing.
    * No long-running work executes inside a browser HTTP request.
    * No credentials may be included in the payload.

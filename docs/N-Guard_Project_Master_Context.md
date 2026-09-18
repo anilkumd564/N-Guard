@@ -95,6 +95,35 @@ The core N-Guard agent/domain logic must not directly depend on CAP request hand
 ## Delivery Approach
 Build N-Guard in independently testable phases. Each phase should inspect and preserve existing work, implement only its intended scope, run lint/test/build, and report changed files and known gaps before the next phase begins.
 
+## Current Implementation State (Phase 16)
+
+All 16 phases have been implemented. The codebase is at **Release Candidate 0.16.0**.
+
+| Phase | Status | Tests |
+|---|---|---|
+| 0 | Foundation and Engineering Guardrails | — |
+| 1 | Application Shell and Local Developer Experience | 8 |
+| 2 | Core Domain Model and Deployment Profiles | 20 |
+| 3 | Requirements and Change Request Workspace | 88 |
+| 4 | Knowledge Provider and Document Ingestion | 22 |
+| 5 | Edition/Release-Aware Retrieval and RAG | 22 |
+| 6 | N-Guard Agent Orchestration Core | 26 |
+| 7 | Fit-to-Standard Assessment Engine (F1-F8) | 32 |
+| 8 | Cross-Edition S/4HANA Comparison | 24 |
+| 9 | Clean Core and Extensibility Governance | 20 |
+| 10 | Evidence, Confidence, and Human Review | 28 |
+| 11 | Dashboards, Audit, and Reporting | — |
+| 12 | Integrations and Asynchronous Jobs | 22 |
+| 13 | Security, Tenant Isolation, and Production Controls | 38 |
+| 14 | BTP Deployment Preparation | 4 |
+| 15 | End-to-End Validation and Release Candidate | 31 |
+| 16 | Release Readiness Report and Architecture Review | — |
+| **Total** | | **437** |
+
+Key artefacts: `mta.yaml`, `xs-security.json`, `docs/threat-model.md`, `docs/deployment-runbook.md`, `docs/feature-registry.md`, `docs/release-readiness-report.md`, `CHANGELOG.md`.
+
+All 15 architecture principles verified PASS. See `docs/release-readiness-report.md` for the full review.
+
 ## Suggested Phases
 0. Foundation and Engineering Guardrails
 1. Application Shell and Local Developer Experience
@@ -112,4 +141,4 @@ Build N-Guard in independently testable phases. Each phase should inspect and pr
 13. Security, Tenant Isolation, and Production Controls
 14. SAP BTP / Cloud Foundry Readiness and Deployment
 15. Test Hardening, Release Readiness, and Operations
-
+16. Release Readiness Report and Architecture Review

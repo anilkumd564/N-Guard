@@ -619,6 +619,45 @@ Do not claim production readiness if unresolved critical issues remain.
 
 ---
 
+## Phase 16 — Release Readiness Report and Architecture Review
+
+```text
+Using the existing N-Guard repository at Release Candidate 0.15.0 (Phases 1–15 complete, 437 tests), perform a final architecture review and produce a release readiness report.
+
+1. Review all source files for:
+   - Hard-coded secrets, API keys, credentials, or absolute paths
+   - Edition-specific assumptions in domain/agent logic
+   - Direct LLM/vector/filesystem calls outside their respective abstraction interfaces
+   - Missing tenant_id or project_id filters on DB queries
+   - Duplicate or stale comments/dead code
+
+2. Fix any issues found during the review.
+
+3. Produce a formal release-readiness report (docs/release-readiness-report.md) that includes:
+   - Architecture principle review table (all 15 principles with PASS/FAIL and evidence)
+   - Test coverage summary
+   - Security review table
+   - Build and quality review
+   - Documentation completeness review
+   - Deferred items with impact assessment
+   - Overall verdict (RELEASE CANDIDATE or BLOCKED)
+
+4. Update docs/N-Guard_Project_Master_Context.md with current implementation state (phase count, test count, key artefacts).
+
+5. Add this Phase 16 prompt to docs/N-Guard_VSCode_Development_Prompts.md.
+
+6. Update phase label in AppService.info() and its tests.
+
+Acceptance criteria:
+- All tests pass (no regressions)
+- Release readiness report is complete with PASS/FAIL per principle
+- No hard-coded secrets or credentials found
+- All architecture principles PASS
+- Master context document updated
+```
+
+---
+
 ## Recommended Execution Order
 
 Run Phase 0 first, validate it, and create a Git checkpoint. Then execute Phases 1 through 15 sequentially. Individual later phases can be worked independently by starting a fresh VS Code coding-agent session, pasting the Master Context Prompt, and then the desired phase prompt, provided the repository already contains the prerequisite domain/interfaces from earlier phases.

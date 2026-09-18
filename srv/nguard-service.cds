@@ -72,6 +72,16 @@ service NGuardService {
   @readonly
   entity EvidenceReferences as projection on nguard.EvidenceReferences;
 
+  // ── Phase 8: Cross-Edition Comparison ────────────────────────────────────
+  /** CrossEditionComparisons — audit trail of comparison runs. */
+  @readonly
+  entity CrossEditionComparisons as projection on nguard.CrossEditionComparisons
+    excluding { editionResults };
+
+  /** EditionComparisonResults — per-edition results of a comparison. */
+  @readonly
+  entity EditionComparisonResults as projection on nguard.EditionComparisonResults;
+
   // ── Unbound Actions ────────────────────────────────────────────────────────
 
   action createProject(
@@ -140,6 +150,14 @@ service NGuardService {
 
   action submitForAssessment(designRequestId : UUID)
     returns ComplianceAssessments;
+
+  /**
+   * Run a cross-edition comparison for a design request.
+   * Runs three independent FitAssessment contexts (one per S/4HANA edition).
+   * Returns the persisted CrossEditionComparisons record.
+   */
+  action runCrossEditionComparison(designRequestId : UUID)
+    returns CrossEditionComparisons;
 
   action approveAssessment(assessmentId : UUID, notes : String)
     returns Boolean;

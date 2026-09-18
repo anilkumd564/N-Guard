@@ -397,6 +397,51 @@ entity EvidenceReferences : cuid {
   score             : Decimal(5, 4);  // 0.0000 – 1.0000
 }
 
+// ─── Phase 8: Cross-Edition Comparison Persistence ───────────────────────────
+
+/**
+ * CrossEditionComparisons stores the result of comparing all three S/4HANA
+ * editions for a single business requirement.
+ * Evidence is always partitioned by edition (architecture rule 2).
+ */
+entity CrossEditionComparisons : cuid, managed {
+  designRequest       : Association to DesignRequests not null;
+  project             : Association to Projects       not null;
+  tenant              : Association to Tenants        not null;
+  businessIntent      : String(1000);
+  processArea         : String(200);
+  summary             : LargeString;          // JSON: CrossEditionSummary
+  evidencePartitioned : Boolean default true;
+  schemaVersion       : String(10);
+  completedAt         : Timestamp;
+  editionResults      : Composition of many EditionComparisonResults
+                          on editionResults.comparison = $self;
+}
+
+/**
+ * EditionComparisonResults stores one row per S/4HANA edition per comparison.
+ * Evidence references are JSON-serialized from the agent layer.
+ */
+entity EditionComparisonResults : cuid {
+  comparison              : Association to CrossEditionComparisons not null;
+  edition                 : S4Edition         not null;
+  fitClassification       : String(5);        // F1|F2|F3|F4|F5|F6|F7|F8
+  deploymentCompatibility : String(20);       // DP-OP|DP-PCE|…
+  evidenceConfidence      : String(30);       // VERIFIED|LIKELY|…
+  confidence              : Decimal(4, 3);
+  standardCapability      : String(500);
+  gapDescription          : LargeString;
+  configurationApproach   : LargeString;
+  extensibilityOptions    : LargeString;
+  majorConstraints        : LargeString;
+  cleanCoreImplications   : LargeString;
+  processIdentifiers      : LargeString;      // JSON: string[]
+  evidenceRefs            : LargeString;      // JSON: EvidenceReference[]
+  agentRunId              : String(100);
+  humanReviewRequired     : Boolean default false;
+  validationPassed        : Boolean default false;
+}
+
 /**
  * AuditLogs — immutable event log.
  */

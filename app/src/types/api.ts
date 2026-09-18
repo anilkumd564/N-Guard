@@ -439,6 +439,53 @@ export interface CreateProjectPayload {
   sourceSystemDescription?: string;
 }
 
+// ─── Phase 8: Cross-Edition Comparison types ─────────────────────────────────
+
+export interface EditionComparisonResult {
+  ID?                     : string;
+  comparison_ID?          : string;
+  edition                 : S4Edition;
+  fitClassification?      : FitClassification;
+  deploymentCompatibility?: DeploymentCompatibilityCode;
+  evidenceConfidence?     : EvidenceConfidence;
+  confidence?             : number;
+  standardCapability?     : string;
+  gapDescription?         : string;
+  configurationApproach?  : string;
+  extensibilityOptions?   : string;
+  majorConstraints?       : string;
+  cleanCoreImplications?  : string;
+  processIdentifiers?     : string;  // JSON: string[]
+  evidenceRefs?           : string;  // JSON: EvidenceReference[]
+  agentRunId?             : string;
+  humanReviewRequired?    : boolean;
+  validationPassed?       : boolean;
+}
+
+export interface CrossEditionComparison {
+  ID?                 : string;
+  designRequest_ID    : string;
+  project_ID          : string;
+  tenant_ID           : string;
+  businessIntent?     : string;
+  processArea?        : string;
+  summary?            : string;   // JSON: CrossEditionSummary
+  evidencePartitioned : boolean;
+  schemaVersion?      : string;
+  completedAt?        : string;
+  createdAt?          : string;
+  modifiedAt?         : string;
+  editionResults?     : EditionComparisonResult[];
+}
+
+export interface CrossEditionSummary {
+  commonCapabilities       : string[];
+  editionSpecificNotes     : string[];
+  recommendedNextAction    : string;
+  overallHumanReviewNeeded : boolean;
+  editionsWithInsufficient : S4Edition[];
+}
+
 // ─── API response wrappers ────────────────────────────────────────────────────
 
 export interface ODataListResponse<T> {

@@ -44,6 +44,66 @@ export function getAgentOrchestrator() {
 }
 
 /**
+ * Get the CrossEditionComparisonEngine for Phase 8 cross-edition comparisons.
+ */
+export function getCrossEditionComparisonEngine() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { CrossEditionComparisonEngine, KnowledgeSearchService } = require('@n-guard/agent') as {
+    CrossEditionComparisonEngine: new (deps: {
+      aiProvider            : unknown;
+      knowledgeSearchService: unknown;
+      options?              : Record<string, unknown>;
+    }) => {
+      compare(
+        input      : unknown,
+        baseContext: unknown,
+        editions?  : readonly string[],
+      ): Promise<{
+        comparisonId        : string;
+        designRequestId     : string;
+        projectId           : string;
+        tenantId            : string;
+        businessIntent      : string;
+        processArea         : string;
+        editionResults      : Array<{
+          edition                : string;
+          fitClassification      : string;
+          deploymentCompatibility: string;
+          evidenceConfidence     : string;
+          confidence             : number;
+          standardCapability?    : string;
+          gapDescription?        : string;
+          configurationApproach? : string;
+          processIdentifiers     : string[];
+          evidenceReferences     : unknown[];
+          humanReviewRequired    : boolean;
+          agentRunId             : string;
+          schemaVersion          : string;
+          validationPassed       : boolean;
+        }>;
+        summary: {
+          commonCapabilities       : string[];
+          editionSpecificNotes     : string[];
+          recommendedNextAction    : string;
+          overallHumanReviewNeeded : boolean;
+          editionsWithInsufficient : string[];
+        };
+        evidencePartitioned : boolean;
+        completedAt         : string;
+        schemaVersion       : string;
+      }>;
+    };
+    KnowledgeSearchService: new (deps: { store: unknown; aiProvider: unknown }) => unknown;
+  };
+
+  const aiProvider = resolveAIProvider();
+  const store      = resolveVectorStore();
+  const search     = new KnowledgeSearchService({ store, aiProvider });
+
+  return new CrossEditionComparisonEngine({ aiProvider, knowledgeSearchService: search });
+}
+
+/**
  * Get the FitAssessmentEngine for Phase 7 F1-F8 structured assessments.
  */
 export function getFitAssessmentEngine() {

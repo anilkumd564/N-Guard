@@ -361,6 +361,40 @@ export async function getAssessment(id: string): Promise<ComplianceAssessment> {
   );
 }
 
+// ─── Cross-Edition Comparison ─────────────────────────────────────────────────
+
+export async function runCrossEditionComparison(
+  designRequestId: string,
+): Promise<import('../types/api.js').CrossEditionComparison> {
+  const result = await request<{ value: import('../types/api.js').CrossEditionComparison }>(
+    '/runCrossEditionComparison',
+    { method: 'POST', body: JSON.stringify({ designRequestId }) },
+  );
+  return result.value;
+}
+
+export async function listCrossEditionComparisons(
+  designRequestId?: string,
+): Promise<import('../types/api.js').CrossEditionComparison[]> {
+  const filter = designRequestId
+    ? `?$filter=designRequest_ID eq ${designRequestId}&$orderby=createdAt desc`
+    : '?$orderby=createdAt desc';
+  const data = await request<import('../types/api.js').ODataListResponse<import('../types/api.js').CrossEditionComparison>>(
+    `/CrossEditionComparisons${filter}`,
+  );
+  return data.value;
+}
+
+export async function listEditionComparisonResults(
+  comparisonId: string,
+): Promise<import('../types/api.js').EditionComparisonResult[]> {
+  const filter = encodeURIComponent(`comparison_ID eq ${comparisonId}`);
+  const data = await request<import('../types/api.js').ODataListResponse<import('../types/api.js').EditionComparisonResult>>(
+    `/EditionComparisonResults?$filter=${filter}`,
+  );
+  return data.value;
+}
+
 export async function listAssessments(
   designRequestId?: string,
 ): Promise<ComplianceAssessment[]> {

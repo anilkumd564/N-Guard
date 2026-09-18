@@ -8,7 +8,7 @@
 
 import cds from '@sap/cds';
 import { createAuditLog } from '../lib/audit.js';
-import { getAgentEngine, getAgentOrchestrator, getFitAssessmentEngine } from '../lib/agent-factory.js';
+import { getAgentEngine, getAgentOrchestrator, getFitAssessmentEngine, getCrossEditionComparisonEngine } from '../lib/agent-factory.js';
 import type { AssessmentRecommendation } from '../types/agent.js';
 import { validateProject, validateDeploymentProfile } from '../types/domain.js';
 import { registerWorkspaceValidation, handleImportRequirements, handleExportRequirements } from './workspace-handler.js';
@@ -294,6 +294,80 @@ export default class NGuardServiceHandler extends cds.ApplicationService {
     this.on('exportRequirements', async (req: cds.Request) => {
       const { projectId, workItemType } = req.data as { projectId: string; workItemType?: string };
       return handleExportRequirements(req, projectId, workItemType);
+    });
+
+    // ── runCrossEditionComparison (Phase 8) ─────────────────────────────────
+    this.on('runCrossEditionComparison', async (req: cds.Request) => {
+      const { designRequestId } = req.data as { designRequestId: string };
+      if (!designRequestId) return req.error(400, 'designRequestId is required');
+
+      const dr = await SELECT.one.from('nguard.DesignRequests').where({ ID: designRequestId })
+        .columns('ID','title','description','businessProcess','module','status','tenant_ID','project_ID');
+      if (!dr) return req.error(404, `DesignRequest ${designRequestId} not found`);
+
+      const project = await SELECT.one.from('nguard.Projects').where({ ID: dr.project_ID })
+        .columns('ID','edition','release','tenant_ID');
+      if (!project) return req.error(404, `Project ${dr.project_ID} not found`);
+
+      const compEngine = getCrossEditionComparisonEngine();
+
+      const cmpResult = await compEngine.compare(
+        {
+          designRequestId, projectId: dr.project_ID, tenantId: dr.tenant_ID,
+          title: dr.title, description: dr.description,
+          businessProcess: dr.businessProcess, module: dr.module,
+          edition: project.edition, release: project.release,
+        },
+        { tenantId: dr.tenant_ID, projectId: dr.project_ID, release: project.release },
+      );
+
+      // Persist CrossEditionComparisons record
+      const [cmp] = await INSERT.into('nguard.CrossEditionComparisons').entries({
+        designRequest_ID    : designRequestId,
+        project_ID          : dr.project_ID,
+        tenant_ID           : dr.tenant_ID,
+        businessIntent      : cmpResult.businessIntent,
+        processArea         : cmpResult.processArea,
+        summary             : JSON.stringify(cmpResult.summary),
+        evidencePartitioned : cmpResult.evidencePartitioned,
+        schemaVersion       : cmpResult.schemaVersion,
+        completedAt         : cmpResult.completedAt,
+      });
+
+      // Persist per-edition results
+      if (cmpResult.editionResults.length > 0) {
+        await INSERT.into('nguard.EditionComparisonResults').entries(
+          cmpResult.editionResults.map(er => ({
+            comparison_ID           : cmp?.ID,
+            edition                 : er.edition,
+            fitClassification       : er.fitClassification,
+            deploymentCompatibility : er.deploymentCompatibility,
+            evidenceConfidence      : er.evidenceConfidence,
+            confidence              : er.confidence,
+            standardCapability      : er.standardCapability ?? null,
+            gapDescription          : er.gapDescription ?? null,
+            configurationApproach   : er.configurationApproach ?? null,
+            processIdentifiers      : JSON.stringify(er.processIdentifiers ?? []),
+            evidenceRefs            : JSON.stringify(er.evidenceReferences ?? []),
+            agentRunId              : er.agentRunId,
+            humanReviewRequired     : er.humanReviewRequired,
+            validationPassed        : er.validationPassed,
+          }))
+        );
+      }
+
+      await createAuditLog(req, {
+        entityType : 'CrossEditionComparison',
+        entityId   : cmp?.ID,
+        action     : 'COMPARE',
+        details    : JSON.stringify({
+          designRequestId,
+          editions: cmpResult.editionResults.map(e => e.edition),
+          overallHumanReviewNeeded: cmpResult.summary.overallHumanReviewNeeded,
+        }),
+      });
+
+      return cmp;
     });
 
     await super.init();

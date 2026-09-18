@@ -62,6 +62,14 @@ export type {
   HttpMethod,
 } from './providers/IntegrationProvider.js';
 
+// Phase 8: Cross-Edition Comparison
+export { CrossEditionComparisonEngine } from './comparison/CrossEditionComparisonEngine.js';
+export type {
+  CrossEditionComparisonResult,
+  CrossEditionSummary,
+  EditionComparisonResult,
+} from './comparison/types.js';
+
 // Phase 7: Fit-to-Standard Assessment
 export { FitAssessmentEngine }  from './assessment/FitAssessmentEngine.js';
 export { MockFitAIProvider }    from './assessment/MockFitAIProvider.js';

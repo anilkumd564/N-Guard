@@ -13,6 +13,7 @@ import type { AssessmentRecommendation } from '../types/agent.js';
 import { validateProject, validateDeploymentProfile } from '../types/domain.js';
 import { registerWorkspaceValidation, handleImportRequirements, handleExportRequirements } from './workspace-handler.js';
 import { handleCreateKnowledgeSource, handleIngestDocument, handleDeleteKnowledgeSource, handleDeleteKnowledgeDocument } from './ingestion-handler.js';
+import { handleGetDashboardStats, handleExportAssessmentsCSV, handleExportDecisionsCSV } from './dashboard-handler.js';
 
 const { SELECT, INSERT } = cds.ql;
 
@@ -441,6 +442,33 @@ export default class NGuardServiceHandler extends cds.ApplicationService {
       });
 
       return cmp;
+    });
+
+    // ── getDashboardStats (Phase 11) ─────────────────────────────────────────
+    this.on('getDashboardStats', async (req: cds.Request) => {
+      const { projectId } = req.data as { projectId: string };
+      if (!projectId) return req.error(400, 'projectId is required');
+      try {
+        return await handleGetDashboardStats(projectId);
+      } catch (err: unknown) {
+        return req.error(500, err instanceof Error ? err.message : String(err));
+      }
+    });
+
+    // ── exportAssessmentsCSV (Phase 11) ───────────────────────────────────────
+    this.on('exportAssessmentsCSV', async (req: cds.Request) => {
+      const { projectId } = req.data as { projectId: string };
+      if (!projectId) return req.error(400, 'projectId is required');
+      const csv = await handleExportAssessmentsCSV(projectId);
+      return csv;
+    });
+
+    // ── exportDecisionsCSV (Phase 11) ─────────────────────────────────────────
+    this.on('exportDecisionsCSV', async (req: cds.Request) => {
+      const { projectId } = req.data as { projectId: string };
+      if (!projectId) return req.error(400, 'projectId is required');
+      const csv = await handleExportDecisionsCSV(projectId);
+      return csv;
     });
 
     // ── submitForReview (Phase 10) ────────────────────────────────────────────

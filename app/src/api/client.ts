@@ -459,6 +459,34 @@ export async function listDesignDecisions(
   return data.value;
 }
 
+// ─── Dashboard and Reports (Phase 11) ────────────────────────────────────────
+
+export async function getDashboardStats(
+  projectId: string,
+): Promise<import('../types/api.js').DashboardStats> {
+  const result = await request<{ value: import('../types/api.js').DashboardStats }>(
+    '/getDashboardStats',
+    { method: 'POST', body: JSON.stringify({ projectId }) },
+  );
+  return result.value;
+}
+
+export async function exportAssessmentsCSV(projectId: string): Promise<string> {
+  const result = await request<{ value: string }>(
+    '/exportAssessmentsCSV',
+    { method: 'POST', body: JSON.stringify({ projectId }) },
+  );
+  return result.value;
+}
+
+export async function exportDecisionsCSV(projectId: string): Promise<string> {
+  const result = await request<{ value: string }>(
+    '/exportDecisionsCSV',
+    { method: 'POST', body: JSON.stringify({ projectId }) },
+  );
+  return result.value;
+}
+
 export async function listAssessments(
   designRequestId?: string,
 ): Promise<ComplianceAssessment[]> {

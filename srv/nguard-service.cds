@@ -200,6 +200,38 @@ service NGuardService {
     dispositionNotes : LargeString
   ) returns DesignDecisions;
 
+  /**
+   * Get aggregated dashboard statistics for a project.
+   * Every metric is derived from stored records — no fabricated KPIs.
+   */
+  action getDashboardStats(projectId : UUID)
+    returns {
+      totalRequirements     : Integer;
+      assessed              : Integer;
+      pendingAssessment     : Integer;
+      approved              : Integer;
+      rejected              : Integer;
+      reviewQueue           : Integer;
+      exceptionsApproved    : Integer;
+      customizationRisk     : Integer;
+      fitDistribution       : LargeString;
+      confidenceDistribution: LargeString;
+      cleanCoreTierDist     : LargeString;
+      decisionsByAction     : LargeString;
+    };
+
+  /**
+   * Export assessments as CSV for the active project.
+   * Every row traces to a specific ComplianceAssessment record.
+   */
+  action exportAssessmentsCSV(projectId : UUID) returns LargeString;
+
+  /**
+   * Export the design decision audit trail as CSV.
+   * Shows who made which governance decision and when.
+   */
+  action exportDecisionsCSV(projectId : UUID) returns LargeString;
+
   action approveAssessment(assessmentId : UUID, notes : String)
     returns Boolean;
 

@@ -607,6 +607,23 @@ export interface DesignDecision {
   modifiedAt?       : string;
 }
 
+// ─── Phase 11: Dashboard Statistics ─────────────────────────────────────────
+
+export interface DashboardStats {
+  totalRequirements      : number;
+  assessed               : number;
+  pendingAssessment      : number;
+  approved               : number;
+  rejected               : number;
+  reviewQueue            : number;
+  exceptionsApproved     : number;
+  customizationRisk      : number;
+  fitDistribution        : string;   // JSON: Record<string,number>
+  confidenceDistribution : string;   // JSON: Record<string,number>
+  cleanCoreTierDist      : string;   // JSON: Record<string,number>
+  decisionsByAction      : string;   // JSON: Record<string,number>
+}
+
 // ─── API response wrappers ────────────────────────────────────────────────────
 
 export interface ODataListResponse<T> {

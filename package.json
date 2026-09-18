@@ -22,7 +22,7 @@
     "format": "prettier --write \"srv/src/**/*.ts\" \"agent/src/**/*.ts\" \"app/src/**/*.{ts,tsx}\" \"*.{json,md,mjs}\"",
     "format:check": "prettier --check \"srv/src/**/*.ts\" \"agent/src/**/*.ts\" \"app/src/**/*.{ts,tsx}\" \"*.{json,md,mjs}\"",
     "typecheck": "tsc --noEmit -p srv/tsconfig.json && npm run typecheck --workspace=agent && npm run typecheck --workspace=app",
-    "deploy:sqlite": "cds deploy --to sqlite"
+    "deploy:sqlite": "cds deploy --to sqlite:db/n-guard-dev.db"
   },
   "dependencies": {
     "@cap-js/sqlite": "^3.1.1",

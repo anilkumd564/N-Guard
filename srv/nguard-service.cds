@@ -10,6 +10,7 @@
 using { nguard } from '../db/schema';
 
 @path: '/api/v1'
+@impl: './dist/handlers/nguard-service.js'
 service NGuardService {
 
   @readonly entity Tenants as projection on nguard.Tenants
@@ -267,6 +268,7 @@ service NGuardService {
 }
 
 @path: '/api/v1/admin'
+@impl: './dist/handlers/admin-service.js'
 service AdminService {
 
   entity Tenants               as projection on nguard.Tenants        excluding { projects };

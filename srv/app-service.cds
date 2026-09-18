@@ -16,6 +16,7 @@
 
 @path: '/api/v1/app'
 @protocol: 'rest'
+@impl: './dist/handlers/app-service.js'
 service AppService {
 
   /** Connectivity test — always returns { pong: true } */

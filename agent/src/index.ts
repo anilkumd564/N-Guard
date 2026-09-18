@@ -62,6 +62,25 @@ export type {
   HttpMethod,
 } from './providers/IntegrationProvider.js';
 
+// Phase 13: Security, RBAC, and Input Validation
+export {
+  hasPermission,
+  hasRole,
+  validateUpload,
+  sanitizeFilename,
+  redactSecrets,
+  ROLE_LABELS,
+  ROLE_SCOPES,
+  ROLE_PERMISSIONS,
+  ALLOWED_DOCUMENT_MIME_TYPES,
+  DEFAULT_MAX_FILE_BYTES,
+  DEFAULT_MAX_PROMPT_CHARS,
+} from './security/types.js';
+export type {
+  NGuardRole,
+  NGuardPermission,
+} from './security/types.js';
+
 // Phase 12: Async Job Queue and Integration Health
 export { AsyncJobQueue, checkIntegrationHealth } from './jobs/AsyncJobQueue.js';
 export type { JobHandler, QueueOptions } from './jobs/AsyncJobQueue.js';

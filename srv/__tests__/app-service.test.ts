@@ -26,7 +26,7 @@ function makeInfoResponse(): { name: string; version: string; environment: strin
     name        : 'n-guard',
     version     : process.env.npm_package_version ?? '0.1.0',
     environment : process.env.NODE_ENV ?? 'development',
-      phase       : '12 — Integrations and Asynchronous Jobs',
+      phase       : '13 — Security, Tenant Isolation, and Production Controls',
   };
 }
 
@@ -54,7 +54,7 @@ describe('AppService — info response', () => {
     expect(makeInfoResponse().version.length).toBeGreaterThan(0);
   });
 
-  it('phase label references Phase 12', () => {
-    expect(makeInfoResponse().phase).toContain('12');
+  it('phase label references Phase 13', () => {
+    expect(makeInfoResponse().phase).toContain('13');
   });
 });

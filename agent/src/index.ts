@@ -62,6 +62,14 @@ export type {
   HttpMethod,
 } from './providers/IntegrationProvider.js';
 
+// Phase 5: Retrieval
+export { KnowledgeSearchService } from './retrieval/KnowledgeSearchService.js';
+export type {
+  KnowledgeSearchQuery,
+  EvidenceCandidate,
+  CrossEditionSearchResult,
+} from './retrieval/KnowledgeSearchService.js';
+
 // Phase 4: Ingestion
 export {
   PlainTextExtractor,

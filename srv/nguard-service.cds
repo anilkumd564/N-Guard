@@ -157,4 +157,11 @@ service AdminService {
   @readonly entity AuditLogs   as projection on nguard.AuditLogs;
 
   action embedDocument(documentId : UUID) returns Boolean;
+
+  /**
+   * Embed all chunks of a knowledge document into the vector store.
+   * Called after ingestion completes (Phase 5: connects Phase 4 chunks to vector index).
+   * Returns the number of chunks indexed.
+   */
+  action embedChunks(documentId : UUID) returns Integer;
 }

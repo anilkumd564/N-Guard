@@ -30,6 +30,7 @@ import type {
   EmbedDocumentInput,
   Verdict,
 } from '../types/index.js';
+import { KnowledgeSearchService } from '../retrieval/KnowledgeSearchService.js';
 
 // ─── Engine Interface ─────────────────────────────────────────────────────────
 
@@ -41,8 +42,10 @@ export interface AgentEngine {
 // ─── Engine Dependencies ──────────────────────────────────────────────────────
 
 export interface AgentEngineDeps {
-  aiProvider  : AIProvider;
-  vectorStore : VectorStore;
+  aiProvider            : AIProvider;
+  vectorStore           : VectorStore;
+  /** Optional: inject KnowledgeSearchService for metadata-filtered retrieval (Phase 5+). */
+  knowledgeSearchService?: KnowledgeSearchService;
 }
 
 // ─── Raw LLM Output Shape ─────────────────────────────────────────────────────
@@ -82,34 +85,35 @@ export class NGuardAgentEngine implements AgentEngine {
 
   readonly agentVersion = '0.1.0';
 
+  private readonly searchService: KnowledgeSearchService;
+
   constructor(deps: AgentEngineDeps) {
     this.ai    = deps.aiProvider;
     this.store = deps.vectorStore;
+    // Use injected KnowledgeSearchService or create one backed by the same VectorStore
+    this.searchService = deps.knowledgeSearchService
+      ?? new KnowledgeSearchService({ store: deps.vectorStore, aiProvider: deps.aiProvider });
   }
 
   // ── assess ─────────────────────────────────────────────────────────────────
 
   async assess(input: AssessmentInput): Promise<AssessmentResult> {
-    // 1. Retrieve relevant knowledge (rule 3: filter by edition + release first)
-    const searchResults = await this.store.search(
-      `${input.title} ${input.description}`,
-      {
-        filter: {
-          tenantId  : input.tenantId,
-          projectId : input.projectId,
-          edition   : input.edition,
-          release   : input.release,
-        },
-        limit     : 6,
-        threshold : 0.0, // Accept all results in mock; real store will filter
-      },
-    );
+    // 1. Retrieve relevant knowledge via KnowledgeSearchService (rule 3: filters BEFORE semantic)
+    const candidates = await this.searchService.search({
+      text      : `${input.title} ${input.description}`,
+      tenantId  : input.tenantId,
+      projectId : input.projectId,
+      edition   : input.edition,
+      release   : input.release,
+      limit     : 6,
+      threshold : 0.0, // Accept all results in mock; real store uses meaningful threshold
+    });
 
-    const contextDocs = searchResults.map(r => ({
-      docId   : r.document.id,
-      title   : r.document.metadata.title ?? r.document.id,
-      excerpt : r.document.content.slice(0, 500),
-      score   : r.score,
+    const contextDocs = candidates.map(c => ({
+      docId   : c.id,
+      title   : c.title,
+      excerpt : c.text.slice(0, 500),
+      score   : c.score,
     }));
 
     // 2. Build prompts

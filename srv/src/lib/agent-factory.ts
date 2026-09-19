@@ -33,7 +33,11 @@ async function resolveAIProvider(): Promise<any> {
     const m = await mod();
     return new m.OpenAIProvider();
   }
-  throw new Error(`Unknown AI_PROVIDER="${name}". Supported: mock | openai`);
+  if (name === 'aicore') {
+    const m = await mod();
+    return new m.SapAICoreProvider();
+  }
+  throw new Error(`Unknown AI_PROVIDER="${name}". Supported: mock | openai | aicore`);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -9,6 +9,9 @@
 export { NGuardAgentEngine }    from './engine/AgentEngine.js';
 export type { AgentEngine, AgentEngineDeps } from './engine/AgentEngine.js';
 
+// OpenAI Provider (set AI_PROVIDER=openai in .env to use)
+export { OpenAIProvider } from './providers/OpenAIProvider.js';
+
 // AIProvider
 export type {
   AIProvider,

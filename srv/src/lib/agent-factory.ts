@@ -24,9 +24,16 @@ async function mod(): Promise<any> {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function resolveAIProvider(): Promise<any> {
-  const name = process.env.AI_PROVIDER ?? 'mock';
-  if (name === 'mock') { const m = await mod(); return new m.MockAIProvider(); }
-  throw new Error(`Unknown AI_PROVIDER="${name}". Supported: mock | aicore`);
+  const name = process.env['AI_PROVIDER'] ?? 'mock';
+  if (name === 'mock') {
+    const m = await mod();
+    return new m.MockAIProvider();
+  }
+  if (name === 'openai') {
+    const m = await mod();
+    return new m.OpenAIProvider();
+  }
+  throw new Error(`Unknown AI_PROVIDER="${name}". Supported: mock | openai`);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
